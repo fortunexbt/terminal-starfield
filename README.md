@@ -9,7 +9,7 @@
 [![Terminal](https://img.shields.io/badge/Terminal-Ready-brightgreen?logo=windowsterminal&logoColor=white)](https://github.com/fortunexbt/terminal-starfield)
 [![Stars](https://img.shields.io/github/stars/fortunexbt/terminal-starfield?style=social)](https://github.com/fortunexbt/terminal-starfield/stargazers)
 
-<img src="https://via.placeholder.com/800x400/000000/FFFFFF?text=Terminal+Starfield+Demo" alt="Terminal Starfield Demo" />
+<img src="https://s7.ezgif.com/tmp/ezgif-7b31887f914c82.gif" alt="Terminal Starfield Demo" />
 
 *A mesmerizing 3D starfield simulation with real-time controls and visual effects*
 
