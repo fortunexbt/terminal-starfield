@@ -47,7 +47,7 @@ That's it! No dependencies required - just Python 3.6+ and a modern terminal.
 <td width="50%">
 
 ### ⚡ Performance
-- **30 FPS** smooth animation
+- **60 FPS** smooth animation
 - **Zero Dependencies** - Pure Python stdlib
 - **Optimized Rendering** - Efficient buffer management
 - **Smart Resizing** - Handles terminal resize gracefully
