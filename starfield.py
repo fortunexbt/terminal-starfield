@@ -8,26 +8,45 @@ import tty
 import select
 import signal
 from collections import deque
+import math
+
+class Trail:
+    def __init__(self, x, y, char, color, lifetime=10):
+        self.x = x
+        self.y = y
+        self.char = char
+        self.color = color
+        self.lifetime = lifetime
+        self.age = 0
+        
+    def update(self):
+        self.age += 1
+        return self.age < self.lifetime
+        
+    def get_intensity(self):
+        # Exponential decay for more natural fading
+        return max(0, 1.0 - (self.age / self.lifetime) ** 2)
 
 class Star:
     def __init__(self, x, y, z):
         self.x = x
         self.y = y
         self.z = z
-        self.prev_x = None
-        self.prev_y = None
+        self.trail_positions = deque(maxlen=15)  # Store trail history per star
         
     def update(self, speed):
+        # Store previous position for trails
+        old_z = self.z
         self.z -= speed
+        
         if self.z <= 0:
             self.reset()
+            self.trail_positions.clear()
             
     def reset(self):
         self.x = random.uniform(-1, 1)
         self.y = random.uniform(-1, 1)
-        self.z = random.uniform(0.1, 1.0)
-        self.prev_x = None
-        self.prev_y = None
+        self.z = random.uniform(0.8, 1.0)  # Start further away
         
     def get_screen_pos(self, width, height):
         if self.z <= 0:
@@ -62,8 +81,8 @@ class Starfield:
         self.paused = False
         self.trails = True
         self.color_mode = True
-        self.trail_buffer = deque(maxlen=8)  # Increased for smoother fading
-        self.frame_buffer = None
+        self.trails_list = []  # Individual trail objects
+        self.frame_time = 0.016  # 60 FPS
         self.pulse_phase = 0
         self.warp_mode = False
         self.warp_timer = 0
@@ -83,56 +102,56 @@ class Starfield:
         
     def handle_resize(self, signum, frame):
         self.update_terminal_size()
-        self.trail_buffer.clear()  # Clear trails on resize to prevent index errors
+        self.trails_list.clear()  # Clear trails on resize
         self.clear_screen()
         
     def update_terminal_size(self):
         size = os.get_terminal_size()
-        self.width = max(20, size.columns)  # Minimum width
-        self.height = max(5, size.lines - 2)  # Minimum height
+        self.width = max(20, size.columns)
+        self.height = max(5, size.lines - 2)
         
-    def get_color(self, z):
+    def get_color(self, z, intensity=1.0):
         if not self.color_mode:
             return ''
             
+        # Apply intensity for fading
+        if intensity < 0.2:
+            return '\033[38;5;232m'  # Almost black
+        elif intensity < 0.4:
+            return '\033[38;5;234m'  # Very dark
+        elif intensity < 0.6:
+            return '\033[38;5;236m'  # Dark
+        elif intensity < 0.8:
+            return '\033[38;5;238m'  # Medium dark
+        
+        # Normal depth-based colors
         if z > 0.8:
-            return '\033[38;5;238m'  # Very dark gray
+            return '\033[38;5;240m'  # Dark gray
         elif z > 0.6:
             return '\033[38;5;245m'  # Medium gray
         elif z > 0.4:
-            return '\033[38;5;252m'  # Light gray
+            return '\033[38;5;250m'  # Light gray
         elif z > 0.2:
             return '\033[38;5;226m'  # Yellow
         else:
             return '\033[38;5;51m'   # Cyan
             
-    def get_trail_char(self, age):
-        """Get progressively fading trail characters"""
-        chars = ['·', '·', '·', '.', '.', ' ', ' ', ' ']
-        return chars[min(age, len(chars) - 1)]
-        
-    def get_trail_color(self, age):
-        """Get progressively fading trail colors"""
-        if not self.color_mode:
-            return ''
-        colors = [
-            '\033[38;5;245m',  # Medium gray
-            '\033[38;5;241m',  # Darker gray
-            '\033[38;5;238m',  # Even darker
-            '\033[38;5;235m',  # Very dark
-            '\033[38;5;233m',  # Almost black
-            '',
-            '',
-            ''
-        ]
-        return colors[min(age, len(colors) - 1)]
+    def get_trail_char(self, intensity):
+        """Get trail character based on intensity"""
+        if intensity > 0.8:
+            return '·'
+        elif intensity > 0.5:
+            return '.'
+        elif intensity > 0.2:
+            return '.'
+        else:
+            return ' '
             
     def clear_screen(self):
         sys.stdout.write('\033[2J\033[H')
         sys.stdout.flush()
         
     def draw_status(self):
-        # Calculate available space
         basic_status = f"Speed: {self.speed:.3f} | Stars: {self.num_stars}"
         if self.warp_mode:
             state = "WARP MODE!"
@@ -141,23 +160,18 @@ class Starfield:
         else:
             state = "Running"
         
-        # Priority controls for small windows
+        # Adaptive display based on width
         if self.width < 40:
-            # Minimal display
             status_line = f"\033[{self.height + 2};1H\033[K{basic_status}"
         elif self.width < 60:
-            # Add state
             status_line = f"\033[{self.height + 2};1H\033[K{basic_status} | {state}"
         elif self.width < 80:
-            # Add basic controls
             status_line = f"\033[{self.height + 2};1H\033[K{basic_status} | {state} | Q:quit Space:pause"
         elif self.width < 120:
-            # Add more controls
             trails_color = f"Trails: {'ON' if self.trails else 'OFF'} | Color: {'ON' if self.color_mode else 'OFF'}"
             status_line = f"\033[{self.height + 2};1H\033[K{basic_status} | {trails_color} | {state}"
             status_line += "\n\033[K↑↓:speed ←→:stars T:trails C:color W:warp Space:pause Q:quit"
         else:
-            # Full display
             status = f"{basic_status} | Trails: {'ON' if self.trails else 'OFF'} | "
             status += f"Color: {'ON' if self.color_mode else 'OFF'} | {state}"
             controls = "↑↓(speed) ←→(stars) 1-5(density) T(trails) C(color) W(warp) R(reset) Space(pause) Q(quit)"
@@ -173,29 +187,49 @@ class Starfield:
         buffer = [[' ' for _ in range(self.width)] for _ in range(self.height)]
         colors = [['' for _ in range(self.width)] for _ in range(self.height)]
         
-        # Draw trails with progressive fading
-        if self.trails and self.trail_buffer:
-            for age, (old_buffer, old_colors) in enumerate(self.trail_buffer):
-                if len(old_buffer) == self.height and all(len(row) == self.width for row in old_buffer):
-                    for y in range(min(self.height, len(old_buffer))):
-                        for x in range(min(self.width, len(old_buffer[y]))):
-                            if old_buffer[y][x] != ' ' and buffer[y][x] == ' ':
-                                buffer[y][x] = self.get_trail_char(age)
-                                colors[y][x] = self.get_trail_color(age)
+        # Update and draw trails
+        if self.trails:
+            # Update existing trails
+            self.trails_list = [trail for trail in self.trails_list if trail.update()]
+            
+            # Draw trails with proper fading
+            for trail in self.trails_list:
+                if 0 <= trail.x < self.width and 0 <= trail.y < self.height:
+                    intensity = trail.get_intensity()
+                    if intensity > 0:
+                        char = self.get_trail_char(intensity)
+                        if char != ' ':
+                            buffer[trail.y][trail.x] = char
+                            colors[trail.y][trail.x] = self.get_color(0.5, intensity)
         
-        # Draw current stars
+        # Draw current stars and create new trails
         for star in self.stars:
             x, y = star.get_screen_pos(self.width, self.height)
             if x is not None and y is not None:
+                # Add trail at previous position
+                if self.trails and len(star.trail_positions) > 0:
+                    prev_x, prev_y = star.trail_positions[-1]
+                    if (prev_x != x or prev_y != y) and 0 <= prev_x < self.width and 0 <= prev_y < self.height:
+                        # Adjust trail lifetime based on speed
+                        trail_lifetime = int(10 / (1 + self.speed * 20))
+                        if self.warp_mode:
+                            trail_lifetime = max(3, trail_lifetime // 2)
+                        
+                        # Only add trail if we're not at max capacity
+                        if len(self.trails_list) < 1000:  # Limit trails to prevent lag
+                            self.trails_list.append(Trail(
+                                prev_x, prev_y, 
+                                '·', 
+                                self.get_color(star.z),
+                                trail_lifetime
+                            ))
+                
+                # Store current position
+                star.trail_positions.append((x, y))
+                
+                # Draw star
                 buffer[y][x] = star.get_char()
                 colors[y][x] = self.get_color(star.z)
-                
-        # Add to trail buffer
-        if self.trails:
-            self.trail_buffer.append((
-                [row[:] for row in buffer],
-                [row[:] for row in colors]
-            ))
         
         # Render the frame
         output = []
@@ -214,7 +248,6 @@ class Starfield:
         sys.stdout.write(''.join(output))
         self.draw_status()
         
-        # Update pulse phase for future effects
         self.pulse_phase = (self.pulse_phase + 0.1) % (2 * 3.14159)
         
     def check_input(self):
@@ -248,13 +281,17 @@ class Starfield:
                                     self.stars = self.stars[:self.num_stars]
             elif key == 't' or key == 'T':
                 self.trails = not self.trails
-                self.trail_buffer.clear()
+                self.trails_list.clear()
+                for star in self.stars:
+                    star.trail_positions.clear()
             elif key == 'c' or key == 'C':
                 self.color_mode = not self.color_mode
             elif key == 'w' or key == 'W':
                 self.warp_mode = not self.warp_mode
                 if self.warp_mode:
-                    self.warp_timer = 100  # Warp for ~3 seconds
+                    self.warp_timer = 60  # Shorter warp duration
+                    # Clear old trails for cleaner warp effect
+                    self.trails_list = [t for t in self.trails_list if t.age < 2]
             elif key == 'r' or key == 'R':
                 # Reset to defaults
                 self.speed = self.default_speed
@@ -262,6 +299,7 @@ class Starfield:
                 self.trails = True
                 self.color_mode = True
                 self.warp_mode = False
+                self.trails_list.clear()
                 # Adjust star count
                 if len(self.stars) > self.num_stars:
                     self.stars = self.stars[:self.num_stars]
@@ -299,7 +337,7 @@ class Starfield:
                 if not self.paused:
                     # Handle warp mode
                     if self.warp_mode and self.warp_timer > 0:
-                        current_speed = self.speed * 5  # 5x speed in warp
+                        current_speed = self.speed * 3  # Reduced from 5x to 3x
                         self.warp_timer -= 1
                         if self.warp_timer <= 0:
                             self.warp_mode = False
@@ -310,7 +348,7 @@ class Starfield:
                         star.update(current_speed)
                         
                 self.draw()
-                time.sleep(0.03)
+                time.sleep(self.frame_time)  # 60 FPS
                 
         except KeyboardInterrupt:
             pass
