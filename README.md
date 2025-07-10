@@ -14,23 +14,29 @@ Terminal Starfield transforms your command line into a window to the cosmos. Wat
 
 ### 🌟 Visual Effects
 - **3D Depth Simulation**: Stars appear smaller when distant and grow as they approach
-- **Motion Trails**: Toggle ethereal trails for a warp-speed effect
+- **Progressive Trail Fading**: Trails gradually fade away for a realistic motion effect
 - **Dynamic Characters**: Star appearance changes based on distance (. · ○ ◉ ⬤)
-- **Color Gradients**: Optional color mode with distance-based coloring
+- **Enhanced Color Gradients**: Improved 256-color palette with smooth transitions
+- **Warp Mode**: Engage hyperdrive for an intense speed burst
 
 ### 🎮 Real-Time Controls
 - **↑/↓ Arrow Keys**: Adjust animation speed
 - **←/→ Arrow Keys**: Add or remove stars (10-500 stars)
+- **1-5 Number Keys**: Quick density presets (50, 100, 200, 350, 500 stars)
 - **Spacebar**: Pause/resume animation
 - **T**: Toggle motion trails on/off
 - **C**: Toggle color mode on/off
+- **W**: Activate warp mode (temporary 5x speed boost)
+- **R**: Reset all settings to defaults
 - **Q**: Quit the application
 
 ### 🚀 Performance
 - Optimized rendering with buffer management
 - Smooth 30 FPS animation
 - Responsive controls with no lag
-- Automatic terminal size detection
+- Automatic terminal size detection and resize handling
+- Smart status bar that adapts to window size
+- Graceful handling of terminal resize events
 
 ## Installation
 
@@ -72,10 +78,23 @@ python3 starfield.py
 | ↓ | Decrease speed |
 | ← | Remove 10 stars |
 | → | Add 10 stars |
+| 1-5 | Density presets (50-500 stars) |
 | Space | Pause/Resume |
 | T | Toggle trails |
 | C | Toggle colors |
+| W | Activate warp mode |
+| R | Reset to defaults |
 | Q | Quit |
+
+## What's New
+
+### Latest Features
+- **Progressive Trail Fading**: Trails now gradually fade away creating a more realistic motion blur effect
+- **Warp Mode**: Press W to temporarily boost speed 5x for that hyperspace jump feeling
+- **Density Presets**: Quick access to different star densities with number keys 1-5
+- **Smart Window Resizing**: Properly handles terminal resize events without crashes
+- **Adaptive Status Bar**: Control display adjusts based on terminal width
+- **Enhanced Colors**: Improved 256-color palette for smoother gradients
 
 ## Technical Details
 
