@@ -18,14 +18,16 @@ class Trail:
         self.color = color
         self.lifetime = lifetime
         self.age = 0
+        # Add slight variations to decay rate
+        self.decay_rate = random.uniform(1.8, 2.5)
         
     def update(self):
         self.age += 1
         return self.age < self.lifetime
         
     def get_intensity(self):
-        # Exponential decay for more natural fading
-        return max(0, 1.0 - (self.age / self.lifetime) ** 2)
+        # Exponential decay for more natural fading with varied decay rate
+        return max(0, 1.0 - (self.age / self.lifetime) ** self.decay_rate)
 
 class Star:
     def __init__(self, x, y, z):
@@ -33,6 +35,7 @@ class Star:
         self.y = y
         self.z = z
         self.trail_positions = deque(maxlen=15)  # Store trail history per star
+        self.trail_factor = random.uniform(0.5, 1.5)  # Random trail length multiplier
         
     def update(self, speed):
         # Store previous position for trails
@@ -142,7 +145,10 @@ class Starfield:
             return '·'
         elif intensity > 0.5:
             return '.'
-        elif intensity > 0.2:
+        elif intensity > 0.3:
+            # Sometimes use a different character for variety
+            return '.' if random.random() < 0.7 else '·'
+        elif intensity > 0.1:
             return '.'
         else:
             return ' '
@@ -210,19 +216,24 @@ class Starfield:
                 if self.trails and len(star.trail_positions) > 0:
                     prev_x, prev_y = star.trail_positions[-1]
                     if (prev_x != x or prev_y != y) and 0 <= prev_x < self.width and 0 <= prev_y < self.height:
-                        # Adjust trail lifetime based on speed
-                        trail_lifetime = int(10 / (1 + self.speed * 20))
+                        # Adjust trail lifetime based on speed and star's random factor
+                        base_lifetime = int(12 / (1 + self.speed * 20))  # Slightly longer base
+                        trail_lifetime = int(base_lifetime * star.trail_factor)
+                        trail_lifetime = max(2, min(20, trail_lifetime))  # Clamp between 2-20
+                        
                         if self.warp_mode:
                             trail_lifetime = max(3, trail_lifetime // 2)
                         
-                        # Only add trail if we're not at max capacity
-                        if len(self.trails_list) < 1000:  # Limit trails to prevent lag
-                            self.trails_list.append(Trail(
-                                prev_x, prev_y, 
-                                '·', 
-                                self.get_color(star.z),
-                                trail_lifetime
-                            ))
+                        # Add some randomness to trail creation (not every frame)
+                        if random.random() < 0.9:  # 90% chance to create trail
+                            # Only add trail if we're not at max capacity
+                            if len(self.trails_list) < 1000:  # Limit trails to prevent lag
+                                self.trails_list.append(Trail(
+                                    prev_x, prev_y, 
+                                    '·', 
+                                    self.get_color(star.z),
+                                    trail_lifetime
+                                ))
                 
                 # Store current position
                 star.trail_positions.append((x, y))
