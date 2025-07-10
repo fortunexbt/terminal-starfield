@@ -36,6 +36,7 @@ class Star:
         self.z = z
         self.trail_positions = deque(maxlen=15)  # Store trail history per star
         self.trail_factor = random.uniform(0.5, 1.5)  # Random trail length multiplier
+        self.temp_offset = random.uniform(-0.05, 0.05)  # Star temperature variation
         
     def update(self, speed):
         # Store previous position for trails
@@ -49,7 +50,9 @@ class Star:
     def reset(self):
         self.x = random.uniform(-1, 1)
         self.y = random.uniform(-1, 1)
-        self.z = random.uniform(0.8, 1.0)  # Start further away
+        self.z = random.uniform(0.85, 1.0)  # Start further away
+        # Add slight variation in star "temperature" for color variety
+        self.temp_offset = random.uniform(-0.05, 0.05)
         
     def get_screen_pos(self, width, height):
         if self.z <= 0:
@@ -63,16 +66,21 @@ class Star:
         return None, None
         
     def get_char(self):
-        if self.z > 0.8:
-            return '.'
+        # Smaller when far, bigger when close
+        if self.z > 0.9:
+            return '.'  # Tiny dot
+        elif self.z > 0.8:
+            return '·'  # Small dot
         elif self.z > 0.6:
-            return '·'
+            return '∙'  # Medium dot
         elif self.z > 0.4:
-            return '○'
+            return '○'  # Small circle
         elif self.z > 0.2:
-            return '◉'
+            return '◉'  # Medium circle
+        elif self.z > 0.1:
+            return '◎'  # Large circle
         else:
-            return '⬤'
+            return '⬤'  # Filled circle
 
 class Starfield:
     def __init__(self):
@@ -117,27 +125,54 @@ class Starfield:
         if not self.color_mode:
             return ''
             
-        # Apply intensity for fading
-        if intensity < 0.2:
-            return '\033[38;5;232m'  # Almost black
-        elif intensity < 0.4:
-            return '\033[38;5;234m'  # Very dark
-        elif intensity < 0.6:
-            return '\033[38;5;236m'  # Dark
-        elif intensity < 0.8:
-            return '\033[38;5;238m'  # Medium dark
+        # Apply intensity for fading trails
+        if intensity < 1.0:
+            # Fading trail colors
+            if intensity < 0.2:
+                return '\033[38;5;232m'  # Almost invisible
+            elif intensity < 0.4:
+                return '\033[38;5;234m'  # Very dark gray
+            elif intensity < 0.6:
+                return '\033[38;5;236m'  # Dark gray
+            elif intensity < 0.8:
+                return '\033[38;5;238m'  # Medium dark gray
+            else:
+                return '\033[38;5;240m'  # Gray
         
-        # Normal depth-based colors
-        if z > 0.8:
-            return '\033[38;5;240m'  # Dark gray
+        # Star colors based on distance (z)
+        # Far away stars are dim and reddish (like real distant stars)
+        # Close stars are bright white/blue (like real bright stars)
+        
+        if z > 0.9:
+            # Very far - dim reddish stars
+            return '\033[38;5;52m'   # Dark red
+        elif z > 0.8:
+            # Far - dim orange/red
+            return '\033[38;5;88m'   # Dim red
+        elif z > 0.7:
+            # Medium-far - orange
+            return '\033[38;5;130m'  # Brown/orange
         elif z > 0.6:
-            return '\033[38;5;245m'  # Medium gray
+            # Medium - yellow-orange
+            return '\033[38;5;172m'  # Orange
+        elif z > 0.5:
+            # Medium - yellow
+            return '\033[38;5;178m'  # Yellow-orange
         elif z > 0.4:
-            return '\033[38;5;250m'  # Light gray
+            # Medium-close - bright yellow
+            return '\033[38;5;220m'  # Bright yellow
+        elif z > 0.3:
+            # Close - yellow-white
+            return '\033[38;5;228m'  # Light yellow
         elif z > 0.2:
-            return '\033[38;5;226m'  # Yellow
+            # Very close - white
+            return '\033[38;5;255m'  # Bright white
+        elif z > 0.1:
+            # Extremely close - blue-white (hot stars)
+            return '\033[38;5;195m'  # Light blue-white
         else:
-            return '\033[38;5;51m'   # Cyan
+            # Right in your face - intense blue
+            return '\033[38;5;87m'   # Bright cyan/blue
             
     def get_trail_char(self, intensity):
         """Get trail character based on intensity"""
@@ -238,9 +273,11 @@ class Starfield:
                 # Store current position
                 star.trail_positions.append((x, y))
                 
-                # Draw star
+                # Draw star with temperature offset for color variety
                 buffer[y][x] = star.get_char()
-                colors[y][x] = self.get_color(star.z)
+                # Apply temperature offset to z value for color calculation
+                color_z = max(0.0, min(1.0, star.z + star.temp_offset))
+                colors[y][x] = self.get_color(color_z)
         
         # Render the frame
         output = []
