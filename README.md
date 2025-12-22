@@ -9,8 +9,6 @@
 [![Terminal](https://img.shields.io/badge/Terminal-Ready-brightgreen?logo=windowsterminal&logoColor=white)](https://github.com/fortunexbt/terminal-starfield)
 [![Stars](https://img.shields.io/github/stars/fortunexbt/terminal-starfield?style=social)](https://github.com/fortunexbt/terminal-starfield/stargazers)
 
-<img src="https://s6.ezgif.com/tmp/ezgif-601dd82bac8c9e.gif" alt="Terminal Starfield Demo" />
-
 </div>
 
 ---
