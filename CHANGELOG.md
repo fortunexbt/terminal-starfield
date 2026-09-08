@@ -1,5 +1,35 @@
 # Changelog
 
+## 4.0.0 — Odyssey
+
+### Added
+
+- Procedural planets, orbital rings, and ruins with shaded 3D ship and flagship geometry
+- Three distinct flagships: The Null Engine, Archon Prime, and Void Seraph, each with three attack patterns
+- Branching sector destinations with heat, plasma, salvage, hull, and repair modifiers
+- Paid refit repairs, seeker crates, and draft rerolls alongside the free wave upgrade
+- Siphon Array, Event Horizon, Arc Relay, and Nova Echo upgrade paths
+- Buffered primary fire, `F` autofire, optional `--mouse` controls, and `I` ship systems
+- `--demo` pilot-driven attract mode that never records demonstration runs
+- Route, jump, boss, and systems snapshot fixtures
+- Ruleset, route, accuracy, graze, and boss statistics in completed flight records
+
+### Changed
+
+- Combat advances in fixed 120 Hz steps independently of rendering
+- Target alignment, seeker locks, and committed impact markers replace the tactical radar
+- Bosses commit both aim and attack pattern before firing; ordinary shooters also telegraph their volleys
+- Remaining salvage is collected when a wave clears, including the final victory
+- The README documents Odyssey controls, builds, routes, and current screenshots
+
+### Fixed
+
+- Swept collision detection prevents fast projectiles from passing through hulls
+- Piercing projectiles damage each target once instead of repeatedly inside its hull
+- Fragmented SGR mouse input is decoded safely and mouse reporting is restored on exit
+- Pauses and overlays discard elapsed time and buffered weapon input
+- Existing flight logs remain readable with optional Odyssey statistics
+
 ## 3.1.0 — Flight Deck
 
 ### Added
