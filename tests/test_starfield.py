@@ -1,7 +1,7 @@
 import unittest
 
 from terminal_starfield.cli import handle_key, parse_size
-from terminal_starfield.model import Contact, Enemy, Projectile, Simulation
+from terminal_starfield.model import Contact, Enemy, Projectile, SHIPS, Simulation
 from terminal_starfield.render import Renderer, strip_ansi
 
 
@@ -90,27 +90,26 @@ class SimulationTests(unittest.TestCase):
         self.assertEqual(sim.state.run_mode, "endless")
 
     def test_full_fifteen_wave_campaign_reaches_victory(self):
-        sim = Simulation(density=40, seed=17)
-        sim.start_run("campaign")
-        for _ in range(60 * 300):
-            state = sim.state
-            if state.screen == "upgrade":
-                sim.choose_upgrade(0)
-            elif state.screen == "playing" and state.enemies:
-                target = min(state.enemies, key=lambda enemy: enemy.z)
-                state.heading_x = target.x
-                state.heading_y = target.y
-                sim.fire_primary()
-                if target.kind in ("frigate", "boss"):
-                    sim.launch_missile()
-                if state.pulse_cooldown <= 0 and any(not shot.friendly and shot.z < 0.6 for shot in state.projectiles):
-                    sim.trigger_pulse()
-            sim.update(1 / 60)
-            if sim.state.screen in ("victory", "game_over"):
-                break
-        self.assertEqual(sim.state.screen, "victory")
-        self.assertEqual(sim.state.wave, 15)
-        self.assertGreater(sim.state.kills, 200)
+        from terminal_starfield.pilot import DemoPilot
+
+        for ship in SHIPS:
+            with self.subTest(ship=ship):
+                sim = Simulation(density=40, seed=17, ship=ship)
+                pilot = DemoPilot()
+                sim.start_run("campaign")
+                # Exercise normal steering, firing, refits and route inputs.
+                # A stationary perfect-aim bot cannot evade committed attacks.
+                for _ in range(60 * 600):
+                    pilot.update(sim, 1 / 60)
+                    sim.update(1 / 60)
+                    if sim.state.screen in ("victory", "game_over"):
+                        break
+                self.assertEqual(sim.state.screen, "victory")
+                self.assertEqual(sim.state.wave, 15)
+                self.assertGreater(sim.state.kills, 200)
+
+                self.assertEqual(sim.state.bosses_defeated, 3)
+                self.assertEqual(len(sim.state.route_history), 3)
 
     def test_seed_is_deterministic(self):
         left = Simulation(seed=7)
@@ -163,26 +162,28 @@ class RenderTests(unittest.TestCase):
         sim = Simulation(seed=2)
         sim.show_title()
         title = Renderer().frame(sim.state, 80, 28, color=False)
-        self.assertIn("R  O  G  U  E", title)
+        self.assertIn("ODYSSEY 4.0 // FLIGHT DECK", title)
+        self.assertIn("VANGUARD", title)
         self.assertIn("CAMPAIGN // 15 WAVES", title)
         sim.start_run("campaign")
         sim.state.wave_remaining = 0
         sim.state.enemies.clear()
         sim.update(1 / 60)
         upgrade = Renderer().frame(sim.state, 80, 28, color=False)
-        self.assertIn("WAVE CLEAR // CHOOSE ONE", upgrade)
-        self.assertIn("Press 1, 2, or 3", upgrade)
+        self.assertIn("ORBITAL REFIT", upgrade)
+        self.assertIn("1 / 2 / 3 install", upgrade)
 
     def test_combat_hud_and_enemy_are_rendered(self):
         sim = Simulation(seed=2)
         sim.start_run("campaign")
         sim.state.enemies = [Enemy("boss", 0, 0, 0.6, 20, 40, 0, 1000)]
         sim.state.boss_name = "TEST TITAN"
+        sim.refresh_target()
         frame = Renderer().frame(sim.state, 100, 30, color=False)
-        self.assertIn("STARFIELD // ROGUE", frame)
+        self.assertIn("VANGUARD // ODYSSEY", frame)
         self.assertIn("TEST TITAN", frame)
-        self.assertIn("THREATS", frame)
-        self.assertIn("RADAR", frame)
+        self.assertIn("HOSTILES", frame)
+        self.assertIn("ALIGNED", frame)
 
     def test_plain_frame_has_exact_dimensions(self):
         sim = Simulation(seed=2)
