@@ -1,5 +1,27 @@
 # Changelog
 
+## 3.1.0 — Flight Deck
+
+### Added
+
+- Three selectable ships: balanced Vanguard, photon specialist Wraith, and nova tank Aegis
+- Flight deck with ship schematics, loadout tradeoffs, seed, and personal best
+- Three boss health phases: committed-aim Lance, Fan, and Crossfire attacks with visible warnings
+- Local flight history, personal bests, and detailed end-of-run debriefs
+- `--ship`, `--records`, `--record-file`, `--no-record`, and `--snapshot-screen`
+
+### Fixed
+
+- Bosses hold engagement depth and must be destroyed to advance
+- Combat randomness is independent of star density, visual settings, and time on the title screen
+- Restart replays the same seed and ship; seeds are shown for reproducible runs
+- Completed combat runs are saved once, with bounded history and atomic, serialized writes
+- Paused flight rejects combat actions and movement
+- Fragmented and batched arrow-key sequences retain every input
+- Small terminals expose menu selections and all three upgrade choices
+- ASCII mode covers the entire frame, including boxes and help
+- Capped upgrades leave the draft pool; fabricators refill three missiles per level without reducing stock
+
 ## 3.0.0 — Rogue
 
 Voyager has become a complete terminal arcade roguelite.
