@@ -15,11 +15,14 @@ import tty
 import uuid
 from contextlib import AbstractContextManager
 from datetime import datetime, timezone
+from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Union
 
 from . import __version__
 from .model import GameState, SHIPS, Simulation
+from .content import ROUTE_CHOICES
+from .pilot import DemoPilot
 from .records import FlightLogError, default_record_path, load_records, record_run
 from .render import Renderer
 
@@ -28,45 +31,82 @@ ENTER_SCREEN = "\x1b[?1049h\x1b[2J\x1b[H\x1b[?25l\x1b[?7l"
 LEAVE_SCREEN = "\x1b[0m\x1b[?7h\x1b[?25h\x1b[?1049l"
 
 
+@dataclass(frozen=True)
+class MouseEvent:
+    button: int
+    x: int
+    y: int
+    released: bool = False
+
+
+InputEvent = Union[str, MouseEvent]
+MOUSE_ON = "\x1b[?1003h\x1b[?1006h"
+MOUSE_OFF = "\x1b[?1003l\x1b[?1006l"
+
+
 class KeyDecoder:
-    """Keep fragmented escape sequences between frames; never swallow a burst."""
+    """Incremental ANSI/SGR decoder with bounded incomplete escape storage."""
 
     def __init__(self) -> None:
         self.pending = b""
         self.escape_started: Optional[float] = None
 
-    def feed(self, data: bytes, now: Optional[float] = None) -> List[str]:
+    @staticmethod
+    def _mouse(sequence: bytes) -> Optional[MouseEvent]:
+        if not sequence.startswith(b"\x1b[<") or sequence[-1:] not in (b"M", b"m"):
+            return None
+        fields = sequence[3:-1].split(b";")
+        if len(fields) != 3 or any(not field.isdigit() or len(field) > 5 for field in fields):
+            return None
+        button, x, y = map(int, fields)
+        if 0 <= button <= 255 and 1 <= x <= 65535 and 1 <= y <= 65535:
+            return MouseEvent(button, x, y, sequence[-1:] == b"m")
+        return None
+
+    def feed(self, data: bytes, now: Optional[float] = None) -> List[InputEvent]:
         now = time.monotonic() if now is None else now
-        self.pending += data
-        keys: List[str] = []
-        while self.pending:
-            if self.pending[0] != 27:
-                char, self.pending = self.pending[0], self.pending[1:]
+        buffer = self.pending + data
+        cursor = 0
+        keys: List[InputEvent] = []
+        while cursor < len(buffer):
+            char = buffer[cursor]
+            if char != 27:
                 if char < 128:
                     keys.append(chr(char))
+                cursor += 1
                 self.escape_started = None
                 continue
             if self.escape_started is None:
                 self.escape_started = now
-            if len(self.pending) >= 2 and self.pending[1] not in (ord("["), ord("O")):
+            if cursor + 1 < len(buffer) and buffer[cursor + 1] not in (ord("["), ord("O")):
                 keys.append("ESC")
-                self.pending = self.pending[1:]
+                cursor += 1
                 self.escape_started = None
                 continue
-            end = next((index for index in range(2, len(self.pending))
-                        if 64 <= self.pending[index] <= 126), None)
+            end = next((index for index in range(cursor + 2, min(len(buffer), cursor + 65))
+                        if 64 <= buffer[index] <= 126), None)
             if end is not None:
-                key = {65: "UP", 66: "DOWN", 67: "RIGHT", 68: "LEFT"}.get(self.pending[end])
-                if key:
-                    keys.append(key)
-                self.pending = self.pending[end + 1:]
+                sequence = buffer[cursor:end + 1]
+                mouse = self._mouse(sequence)
+                if mouse is not None:
+                    keys.append(mouse)
+                elif not sequence.startswith(b"\x1b[<"):
+                    key = {65: "UP", 66: "DOWN", 67: "RIGHT", 68: "LEFT"}.get(buffer[end])
+                    if key:
+                        keys.append(key)
+                cursor = end + 1
+                self.escape_started = None
+            elif len(buffer) - cursor > 64:
+                # A valid supported sequence is at most a few dozen bytes.
+                cursor = len(buffer)
                 self.escape_started = None
             elif now - self.escape_started >= 0.04:
                 keys.append("ESC")
-                self.pending = b""
+                cursor = len(buffer)
                 self.escape_started = None
             else:
                 break
+        self.pending = buffer[cursor:]
         return keys
 
 
@@ -91,7 +131,7 @@ class FlightRecorder:
             self.current = state
             self.completed = False
             state.record_status = ""
-        if (not self.completed and state.run_mode in ("campaign", "endless") and
+        if (not state.demo and not self.completed and state.run_mode in ("campaign", "endless") and
                 state.screen in ("victory", "game_over")):
             self.completed = True
             if not self.enabled:
@@ -102,6 +142,9 @@ class FlightRecorder:
                     mode=state.run_mode, ship=state.ship_id, seed=state.seed,
                     outcome=state.screen, score=state.score, kills=state.kills,
                     wave=state.wave, best_combo=state.best_combo, seconds=round(state.elapsed, 2),
+                    ruleset=__version__, route=list(state.route_history[-32:]),
+                    accuracy=round(100 * state.shots_hit / max(1, state.shots_fired), 1),
+                    grazes=state.grazes, bosses=state.bosses_defeated,
                 )
                 try:
                     self.data = record_run(self.path, entry)
@@ -118,7 +161,8 @@ class FlightRecorder:
 class TerminalSession(AbstractContextManager):
     """Owns terminal state and guarantees restoration on every exit path."""
 
-    def __init__(self) -> None:
+    def __init__(self, mouse: bool = False) -> None:
+        self.mouse = mouse
         self.fd = sys.stdin.fileno()
         self.settings = None
         self.resize_pending = False
@@ -133,7 +177,7 @@ class TerminalSession(AbstractContextManager):
         self.old_term = signal.getsignal(signal.SIGTERM)
         signal.signal(signal.SIGWINCH, self._on_resize)
         signal.signal(signal.SIGTERM, self._on_terminate)
-        sys.stdout.write(ENTER_SCREEN)
+        sys.stdout.write(ENTER_SCREEN + (MOUSE_ON if self.mouse else ""))
         sys.stdout.flush()
         return self
 
@@ -150,7 +194,7 @@ class TerminalSession(AbstractContextManager):
             signal.signal(signal.SIGWINCH, self.old_winch)
         if self.old_term is not None:
             signal.signal(signal.SIGTERM, self.old_term)
-        sys.stdout.write(LEAVE_SCREEN)
+        sys.stdout.write((MOUSE_OFF if self.mouse else "") + LEAVE_SCREEN)
         sys.stdout.flush()
 
     @staticmethod
@@ -158,7 +202,7 @@ class TerminalSession(AbstractContextManager):
         size = shutil.get_terminal_size((100, 30))
         return max(20, size.columns), max(8, size.lines)
 
-    def read_keys(self) -> List[str]:
+    def read_keys(self) -> List[InputEvent]:
         data = bytearray()
         while select.select([sys.stdin], [], [], 0.0)[0]:
             chunk = os.read(self.fd, 4096)
@@ -183,12 +227,30 @@ def handle_key(simulation: Simulation, key: str) -> bool:
             simulation.cycle_ship(-1)
         elif key == "RIGHT" or lower == "d":
             simulation.cycle_ship(1)
+        elif lower == "f":
+            simulation.toggle_auto_fire()
         elif key in ("\r", "\n", " "):
             return simulation.activate_menu()
+        return True
+    if state.systems_visible:
+        if lower == "i" or key == "ESC":
+            state.systems_visible = False
+        return True
+    if lower == "i" and state.screen in ("playing", "upgrade"):
+        state.systems_visible = True
+        state.help_visible = False
         return True
     if state.screen == "upgrade":
         if key in ("1", "2", "3"):
             simulation.choose_upgrade(int(key) - 1)
+        elif key in ("4", "5", "6"):
+            simulation.buy_service({"4": "repair", "5": "missiles", "6": "reroll"}[key])
+        return True
+    if state.screen == "route":
+        if key in ("1", "2", "3"):
+            simulation.choose_route(int(key) - 1)
+        return True
+    if state.screen == "jump":
         return True
     if state.screen in ("game_over", "victory"):
         if lower == "r":
@@ -198,13 +260,15 @@ def handle_key(simulation: Simulation, key: str) -> bool:
         return True
     if lower in ("h", "?"):
         state.help_visible = not state.help_visible
+        state.systems_visible = False
         state.paused = False
         return True
     if key == "ESC":
         state.help_visible = False
+        state.systems_visible = False
         state.paused = False
         return True
-    if state.help_visible:
+    if state.help_visible or state.systems_visible:
         return True
     if state.paused and lower not in ("p", "r", "t", "c") and key != " ":
         return True
@@ -216,7 +280,7 @@ def handle_key(simulation: Simulation, key: str) -> bool:
         if state.paused:
             state.paused = False
         elif state.run_mode in ("campaign", "endless"):
-            simulation.fire_primary()
+            simulation.request_fire()
         else:
             simulation.engage_boost()
     elif lower == "b" and state.run_mode in ("campaign", "endless"):
@@ -225,6 +289,8 @@ def handle_key(simulation: Simulation, key: str) -> bool:
         simulation.launch_missile()
     elif lower == "e" and state.run_mode in ("campaign", "endless"):
         simulation.trigger_pulse()
+    elif lower == "f" and state.run_mode in ("campaign", "endless"):
+        simulation.toggle_auto_fire()
     elif lower == "z" and state.run_mode not in ("campaign", "endless"):
         simulation.toggle_zen()
     elif lower == "t":
@@ -240,7 +306,7 @@ def handle_key(simulation: Simulation, key: str) -> bool:
         simulation.steer(-1.0, 0.0)
     elif key in ("RIGHT", "d"):
         simulation.steer(1.0, 0.0)
-    elif lower in ("w", "i"):
+    elif lower == "w":
         simulation.steer(0.0, -1.0)
     elif lower in ("s", "k"):
         simulation.steer(0.0, 1.0)
@@ -253,37 +319,78 @@ def handle_key(simulation: Simulation, key: str) -> bool:
     return True
 
 
+def handle_mouse(simulation: Simulation, event: MouseEvent, width: int, height: int) -> None:
+    """The pointer steers the flight vector; the centered sight remains the aim."""
+    state = simulation.state
+    if state.screen != "playing" or state.paused or state.help_visible or state.systems_visible or state.game_over:
+        return
+    if event.button & 64:
+        simulation.change_throttle(.05 if event.button & 1 == 0 else -.05)
+        return
+    x = ((event.x - 1) / max(1, width - 1) - .5) * .96
+    y = ((event.y - 1) / max(1, height - 1) - .5) * .62
+    simulation.aim_at(x, y)
+    if not event.released:
+        button = event.button & 3
+        if button == 0:
+            simulation.request_fire()
+        elif button == 2:
+            simulation.launch_missile()
+
+
 def run_interactive(args: argparse.Namespace) -> int:
     if not (sys.stdin.isatty() and sys.stdout.isatty()):
         print("terminal-starfield needs a TTY. Try --snapshot 100x30 for non-interactive output.", file=sys.stderr)
         return 2
     simulation = Simulation(density=args.stars, seed=args.seed, zen=args.zen, ship=args.ship)
+    simulation.state.auto_fire = args.auto_fire or args.demo
     simulation.state.theme_index = args.theme
     simulation.state.trails = not args.no_trails
     if args.zen:
         simulation.start_run("zen")
+    elif args.demo:
+        simulation.start_run(args.mode or "campaign")
     elif args.mode:
         simulation.start_run(args.mode)
     else:
         simulation.show_title()
     renderer = Renderer(unicode=not args.ascii)
-    recorder = FlightRecorder(args.record_file, enabled=not args.no_record)
+    demo_mode = args.demo
+    pilot = DemoPilot()
+    recorder = FlightRecorder(args.record_file, enabled=not (args.no_record or demo_mode))
     recorder.observe(simulation.state)
     target_frame = 1.0 / args.fps
     last = time.monotonic()
     running = True
-    with TerminalSession() as terminal:
+    with TerminalSession(mouse=args.mouse) as terminal:
         while running:
             frame_started = time.monotonic()
             dt = frame_started - last
             last = frame_started
-            for key in terminal.read_keys():
-                running = handle_key(simulation, key)
+            events = terminal.read_keys()
+            if demo_mode and events:
+                if any(isinstance(event, str) and event.lower() in ("q", "\x03") for event in events):
+                    running = False
+                else:
+                    demo_mode = False
+                    simulation.state.demo = False
+                    simulation.show_title()
+                    recorder = FlightRecorder(args.record_file, enabled=not args.no_record)
+                events = []
+            for event in events:
+                if isinstance(event, MouseEvent):
+                    if args.mouse:
+                        handle_mouse(simulation, event, *terminal.size())
+                else:
+                    running = handle_key(simulation, event)
                 if not running:
                     break
             if not running:
                 break
+            if demo_mode:
+                pilot.update(simulation, min(.08, dt))
             simulation.update(dt)
+            simulation.state.demo = demo_mode
             recorder.observe(simulation.state)
             width, height = terminal.size()
             output = renderer.frame(simulation.state, width, height, color=not args.no_color)
@@ -316,6 +423,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--fps", type=int, choices=range(15, 121), default=60, metavar="N", help="frame rate, 15–120 (default: 60)")
     parser.add_argument("--seed", type=int, default=None, help="deterministic universe seed")
     parser.add_argument("--ship", choices=tuple(SHIPS), default="vanguard", help="starting ship (default: vanguard)")
+    parser.add_argument("--auto-fire", action="store_true", help="automatically fire while a target is aligned (F toggles)")
+    parser.add_argument("--mouse", action="store_true", help="SGR mouse steering, left fire, right seeker, wheel throttle")
+    parser.add_argument("--demo", action="store_true", help="watch a pilot play; any key returns to flight deck; never recorded")
     parser.add_argument("--theme", type=int, choices=range(4), default=0, metavar="N", help="initial theme, 0–3")
     parser.add_argument("--zen", action="store_true", help="start as a pure starfield without HUD gameplay")
     parser.add_argument("--mode", choices=("campaign", "endless", "voyage", "zen"), help="skip the title and start a mode directly")
@@ -323,7 +433,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-color", action="store_true", help="disable ANSI color")
     parser.add_argument("--no-trails", action="store_true", help="disable star streaks")
     parser.add_argument("--snapshot", type=parse_size, metavar="WIDTHxHEIGHT", help="render one deterministic frame and exit")
-    parser.add_argument("--snapshot-screen", choices=("playing", "title", "upgrade", "game_over", "victory"), default="playing", help="screen to preview with --snapshot")
+    parser.add_argument("--snapshot-screen", choices=("playing", "title", "upgrade", "game_over", "victory", "route", "jump", "boss", "systems"), default="playing", help="screen to preview with --snapshot")
     parser.add_argument("--state-snapshot", action="store_true", help="print deterministic gameplay state as JSON and exit")
     parser.add_argument("--records", action="store_true", help="print local flight history as JSON and exit")
     parser.add_argument("--record-file", type=Path, default=default_record_path(), metavar="PATH", help="flight log location (default: XDG data directory)")
@@ -334,6 +444,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Optional[List[str]] = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.demo and (args.zen or args.mode in ("zen", "voyage")):
+        build_parser().error("--demo supports campaign and endless modes")
     args.stars = max(40, min(800, args.stars))
     args.no_color = args.no_color or "NO_COLOR" in os.environ
     if args.records:
@@ -348,10 +460,32 @@ def main(argv: Optional[List[str]] = None) -> int:
         mode = "zen" if args.zen else (args.mode or "campaign")
         simulation = Simulation(density=args.stars, seed=42 if args.seed is None else args.seed, zen=args.zen, ship=args.ship)
         simulation.start_run(mode)
+        simulation.state.auto_fire = args.auto_fire
         simulation.state.theme_index = args.theme
         simulation.state.trails = not args.no_trails
         # Advance into an interesting, fully populated moment.
         simulation.advance_time(2200)
+        if args.snapshot_screen in ("route", "jump"):
+            simulation.state.wave = 6
+            simulation.state.screen = "route"
+            simulation.state.paused = True
+            simulation.state.route_choices = list(ROUTE_CHOICES)
+            if args.snapshot_screen == "jump":
+                simulation.choose_route(0)
+                simulation.advance_time(500)
+        elif args.snapshot_screen == "boss":
+            simulation.start_run("campaign")
+            simulation.state.wave = 10
+            simulation._begin_wave()
+            simulation._spawn_enemy()
+            boss = simulation.state.enemies[0]
+            boss.z = .55
+            boss.hp = boss.max_hp * .55
+            boss.fire_clock = .65
+            simulation.state.messages.clear()
+            simulation.update(1 / 60)
+        elif args.snapshot_screen == "systems":
+            simulation.state.systems_visible = True
         if args.snapshot_screen == "title":
             simulation.show_title()
         elif args.snapshot_screen == "upgrade":

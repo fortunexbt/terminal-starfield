@@ -33,6 +33,35 @@ class FlightLogTests(unittest.TestCase):
         self.assertEqual(data["total_runs"], 1)
         self.assertEqual(load_records(self.path)["best"]["seed"], 7)
 
+    def test_odyssey_statistics_roundtrip_alongside_legacy_results(self):
+        record_run(self.path, result())
+        entry = result(1)
+        entry.update(ruleset="4.0.0", route=["frontier", "veil", "graveyard"],
+                     accuracy=64.5, grazes=12, bosses=3)
+        record_run(self.path, entry)
+        self.assertEqual(load_records(self.path)["history"], [entry, result()])
+
+    def test_invalid_optional_statistics_do_not_replace_previous_log(self):
+        record_run(self.path, result())
+        before = self.path.read_bytes()
+        for field, value in (("route", ["unknown"]), ("route", ["veil"] * 33),
+                             ("ruleset", "\x1b[2J"), ("accuracy", float("nan")),
+                             ("accuracy", 101), ("grazes", True), ("bosses", 2 ** 63)):
+            with self.subTest(field=field, value=value):
+                entry = result(1)
+                entry[field] = value
+                with self.assertRaises(FlightLogError):
+                    record_run(self.path, entry)
+                self.assertEqual(self.path.read_bytes(), before)
+
+    def test_demo_completion_is_never_recorded_even_by_enabled_observer(self):
+        sim = Simulation(seed=7)
+        sim.start_run("campaign")
+        sim.state.demo = True
+        sim.state.screen = "victory"
+        FlightRecorder(self.path).observe(sim.state)
+        self.assertFalse(self.path.parent.exists())
+
     def test_history_is_bounded_but_best_and_total_survive(self):
         for index in range(40):
             record_run(self.path, result(index, 1000 if index == 0 else 10))

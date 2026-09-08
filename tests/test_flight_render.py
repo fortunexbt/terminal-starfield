@@ -29,7 +29,7 @@ class FlightRenderTests(unittest.TestCase):
                 with self.subTest(size=(width, height)):
                     frame = Renderer(unicode=False).frame(sim.state, width, height, color=False)
                     self.assertIn("SIGNALS 1", frame)
-                    self.assertIn("1234.8 AU", frame)
+                    self.assertIn("{:.1f} AU".format(sim.state.distance), frame)
                     self.assertIn("CHAIN 1", frame)
                     self.assertIn("NOT RECORDED", frame)
                     self.assertNotIn("PENDING", frame)

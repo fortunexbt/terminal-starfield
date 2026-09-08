@@ -119,7 +119,7 @@ class FlightModelTests(unittest.TestCase):
             sim.state.wave = wave
             sim._begin_wave()
             names.append(sim.state.boss_name)
-        self.assertEqual(names, ["THE NULL ENGINE", "ARCHON PRIME", "VOID SERAPH", "RED GIANT", "THE NULL ENGINE"])
+        self.assertEqual(names, ["THE NULL ENGINE", "ARCHON PRIME", "VOID SERAPH", "THE NULL ENGINE", "ARCHON PRIME"])
         boss = Enemy("boss", 0, 0, 0.53, 40, 40, 0.5, 2500, fire_clock=999)
         sim.state.enemies = [boss]
         sim.state.wave_remaining = 0

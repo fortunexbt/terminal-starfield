@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 from .model import SHIPS
+from .content import ROUTES
 
 MAX_LOG_CHARS = 1_000_000
 HISTORY_LIMIT = 30
@@ -46,6 +47,20 @@ def _validate_result(entry: Any) -> None:
     if (type(seconds) not in (int, float) or not 0 <= seconds <= MAX_RECORD_NUMBER or
             not math.isfinite(seconds)):
         raise FlightLogError("invalid flight duration")
+    # Older logs remain readable; new rulesets carry their own replay identity.
+    if "ruleset" in entry and (not isinstance(entry["ruleset"], str) or
+                               not 1 <= len(entry["ruleset"]) <= 32 or not entry["ruleset"].isprintable()):
+        raise FlightLogError("invalid flight ruleset")
+    if "route" in entry:
+        route = entry["route"]
+        if (not isinstance(route, list) or len(route) > 32 or
+                any(not isinstance(stop, str) or stop not in ROUTES for stop in route)):
+            raise FlightLogError("invalid flight route")
+    for key in ("grazes", "bosses"):
+        if key in entry and (type(entry[key]) is not int or not 0 <= entry[key] <= MAX_RECORD_NUMBER):
+            raise FlightLogError("invalid flight statistic")
+    if "accuracy" in entry and (type(entry["accuracy"]) not in (int, float) or not 0 <= entry["accuracy"] <= 100):
+        raise FlightLogError("invalid flight accuracy")
 
 
 def load_records(path: Path) -> Dict[str, Any]:
