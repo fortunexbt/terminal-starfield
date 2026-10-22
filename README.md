@@ -12,6 +12,8 @@
 
 **A seeded space-combat roguelite rendered in your terminal.**
 
+**[Play it in your browser](https://terminal-starfield.vercel.app)** · the real Python game, running on Pyodide
+
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-48eeff)](https://www.python.org/)
 [![zero dependencies](https://img.shields.io/badge/runtime_dependencies-zero-9c6cff)](pyproject.toml)
 [![tests](https://github.com/fortunexbt/terminal-starfield/actions/workflows/test.yml/badge.svg)](https://github.com/fortunexbt/terminal-starfield/actions/workflows/test.yml)
@@ -19,7 +21,7 @@
 
 </div>
 
-![Odyssey flight with a procedural world and projected combat](docs/odyssey-flight.png)
+[![The browser build at terminal-starfield.vercel.app, mid-combat](docs/web-demo.webp)](https://terminal-starfield.vercel.app)
 
 **Starfield Rogue 4.0 — Odyssey** combines projected 3D flight, three ship loadouts, branching sector routes, and upgrade drafts. Line up contacts in the centered sight, manage weapon heat, and move away from committed plasma strikes.
 
@@ -30,6 +32,13 @@ Python 3.9+ is required. There are **zero runtime dependencies**.
 ## Install and launch
 
 ```bash
+pipx install git+https://github.com/fortunexbt/terminal-starfield
+starfield
+```
+
+Or run it from a clone without installing anything:
+
+```bash
 git clone https://github.com/fortunexbt/terminal-starfield.git
 cd terminal-starfield
 python3 starfield.py
@@ -37,12 +46,9 @@ python3 starfield.py
 
 Use a modern macOS or Linux terminal, or Windows Terminal through WSL. Interactive play requires a TTY. A monospaced font with box-drawing, block-shading, and Braille glyphs shows the full artwork; use `--ascii` when those glyphs are unavailable.
 
-For an installed command:
+To install from a clone, use `python3 -m pip install .`.
 
-```bash
-python3 -m pip install .
-starfield
-```
+![Odyssey flight with a procedural world and projected combat](docs/odyssey-flight.png)
 
 ## Choose a run
 
@@ -212,6 +218,24 @@ python3 starfield.py --record-file ./my-flights.json    # choose a different loc
 ```
 
 The default path is `$XDG_DATA_HOME/terminal-starfield/flight-log.json`, or `~/.local/share/terminal-starfield/flight-log.json`. The log retains the latest 30 completed flights, the all-time best, and the total count. Writes are atomic and serialized across sessions. An unreadable or malformed log is preserved and reported as unavailable while play continues.
+
+## Browser build
+
+[terminal-starfield.vercel.app](https://terminal-starfield.vercel.app) runs the unmodified `terminal_starfield` package on [Pyodide](https://pyodide.org) inside a Web Worker. [`web/src/web_tty.py`](web/src/web_tty.py) stands in for the terminal session: it feeds bytes from [xterm.js](https://xtermjs.org) to the game's `KeyDecoder`, advances the same `Flight` loop the TTY runtime uses, and returns the ANSI frame for xterm.js to draw. Vite bundles the Python sources into the worker at build time, so a change to the game ships to the browser on the next deploy.
+
+```bash
+cd web
+npm ci
+npm run dev        # http://localhost:4231
+npm run build      # static site in web/dist
+```
+
+Limits of the browser build:
+
+- The first launch downloads about 6 MB of Python runtime from jsDelivr. Later launches come from the browser cache.
+- Laptops get `--mouse`; touch devices get `--auto-fire` and an on-screen pad. Other launch options are not exposed.
+- The flight log lives in this browser's IndexedDB, not in `~/.local/share`.
+- Frame rate depends on the device. A recent laptop holds about 60 frames per second.
 
 ## Development checks
 
