@@ -338,68 +338,76 @@ def handle_mouse(simulation: Simulation, event: MouseEvent, width: int, height: 
             simulation.launch_missile()
 
 
+class Flight:
+    """One interactive session's game loop, independent of the terminal that feeds it."""
+
+    def __init__(self, args: argparse.Namespace) -> None:
+        self.args = args
+        self.simulation = Simulation(density=args.stars, seed=args.seed, zen=args.zen, ship=args.ship)
+        self.simulation.state.auto_fire = args.auto_fire or args.demo
+        self.simulation.state.theme_index = args.theme
+        self.simulation.state.trails = not args.no_trails
+        if args.zen:
+            self.simulation.start_run("zen")
+        elif args.demo:
+            self.simulation.start_run(args.mode or "campaign")
+        elif args.mode:
+            self.simulation.start_run(args.mode)
+        else:
+            self.simulation.show_title()
+        self.renderer = Renderer(unicode=not args.ascii)
+        self.demo_mode = args.demo
+        self.pilot = DemoPilot()
+        self.recorder = FlightRecorder(args.record_file, enabled=not (args.no_record or self.demo_mode))
+        self.recorder.observe(self.simulation.state)
+
+    def step(self, events: List[InputEvent], dt: float, width: int, height: int) -> Optional[str]:
+        """Apply input, advance by dt and return the next frame, or None to exit."""
+        simulation = self.simulation
+        if self.demo_mode and events:
+            if any(isinstance(event, str) and event.lower() in ("q", "\x03") for event in events):
+                return None
+            self.demo_mode = False
+            simulation.state.demo = False
+            simulation.show_title()
+            self.recorder = FlightRecorder(self.args.record_file, enabled=not self.args.no_record)
+            events = []
+        for event in events:
+            if isinstance(event, MouseEvent):
+                if self.args.mouse:
+                    handle_mouse(simulation, event, width, height)
+            elif not handle_key(simulation, event):
+                return None
+        if self.demo_mode:
+            self.pilot.update(simulation, min(.08, dt))
+        simulation.update(dt)
+        simulation.state.demo = self.demo_mode
+        self.recorder.observe(simulation.state)
+        return self.renderer.frame(simulation.state, width, height, color=not self.args.no_color)
+
+
 def run_interactive(args: argparse.Namespace) -> int:
     if not (sys.stdin.isatty() and sys.stdout.isatty()):
         print("terminal-starfield needs a TTY. Try --snapshot 100x30 for non-interactive output.", file=sys.stderr)
         return 2
-    simulation = Simulation(density=args.stars, seed=args.seed, zen=args.zen, ship=args.ship)
-    simulation.state.auto_fire = args.auto_fire or args.demo
-    simulation.state.theme_index = args.theme
-    simulation.state.trails = not args.no_trails
-    if args.zen:
-        simulation.start_run("zen")
-    elif args.demo:
-        simulation.start_run(args.mode or "campaign")
-    elif args.mode:
-        simulation.start_run(args.mode)
-    else:
-        simulation.show_title()
-    renderer = Renderer(unicode=not args.ascii)
-    demo_mode = args.demo
-    pilot = DemoPilot()
-    recorder = FlightRecorder(args.record_file, enabled=not (args.no_record or demo_mode))
-    recorder.observe(simulation.state)
+    flight = Flight(args)
     target_frame = 1.0 / args.fps
     last = time.monotonic()
-    running = True
     with TerminalSession(mouse=args.mouse) as terminal:
-        while running:
+        while True:
             frame_started = time.monotonic()
             dt = frame_started - last
             last = frame_started
-            events = terminal.read_keys()
-            if demo_mode and events:
-                if any(isinstance(event, str) and event.lower() in ("q", "\x03") for event in events):
-                    running = False
-                else:
-                    demo_mode = False
-                    simulation.state.demo = False
-                    simulation.show_title()
-                    recorder = FlightRecorder(args.record_file, enabled=not args.no_record)
-                events = []
-            for event in events:
-                if isinstance(event, MouseEvent):
-                    if args.mouse:
-                        handle_mouse(simulation, event, *terminal.size())
-                else:
-                    running = handle_key(simulation, event)
-                if not running:
-                    break
-            if not running:
+            output = flight.step(terminal.read_keys(), dt, *terminal.size())
+            if output is None:
                 break
-            if demo_mode:
-                pilot.update(simulation, min(.08, dt))
-            simulation.update(dt)
-            simulation.state.demo = demo_mode
-            recorder.observe(simulation.state)
-            width, height = terminal.size()
-            output = renderer.frame(simulation.state, width, height, color=not args.no_color)
             sys.stdout.write("\x1b[H" + output)
             sys.stdout.flush()
             delay = target_frame - (time.monotonic() - frame_started)
             if delay > 0.0:
                 time.sleep(delay)
-    print("Voyage complete // score {:,} // distance {:.1f} AU".format(simulation.state.score, simulation.state.distance))
+    state = flight.simulation.state
+    print("Voyage complete // score {:,} // distance {:.1f} AU".format(state.score, state.distance))
     return 0
 
 
