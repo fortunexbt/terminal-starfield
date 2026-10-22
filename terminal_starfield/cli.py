@@ -310,7 +310,7 @@ def handle_key(simulation: Simulation, key: str) -> bool:
         simulation.steer(0.0, -1.0)
     elif lower in ("s", "k"):
         simulation.steer(0.0, 1.0)
-    elif key in ("1", "2", "3", "4", "5"):
+    elif key in ("1", "2", "3", "4", "5") and state.run_mode not in ("campaign", "endless"):
         simulation.density_preset(int(key) - 1)
     elif key == "[":
         simulation.set_density(state.density - 40)

@@ -32,7 +32,7 @@ Python 3.9+ is required. There are **zero runtime dependencies**.
 ## Install and launch
 
 ```bash
-pipx install git+https://github.com/fortunexbt/terminal-starfield
+pipx install terminal-starfield
 starfield
 ```
 
@@ -48,7 +48,7 @@ Use a modern macOS or Linux terminal, or Windows Terminal through WSL. Interacti
 
 To install from a clone, use `python3 -m pip install .`.
 
-![Odyssey flight with a procedural world and projected combat](docs/odyssey-flight.png)
+![Odyssey flight with a procedural world and projected combat](https://raw.githubusercontent.com/fortunexbt/terminal-starfield/main/docs/odyssey-flight.png)
 
 ## Choose a run
 
@@ -102,11 +102,11 @@ Steering moves the flight vector through the projected scene. The reticle shows 
 | **P** | Pause or resume |
 | **R** | Restart with the same seed and selected ship |
 | **T / C** | Toggle trails / cycle color theme |
-| **1–5**, **[ / ]** | Change star density during flight |
+| **[ / ]** | Change star density during flight; **1–5** also set it in free flight |
 | **Esc** | Close an overlay or resume; return to the flight deck from a debrief |
 | **Q** | Exit |
 
-The manual and systems inventory suspend simulation. The inventory is also available during refit. Route and upgrade screens use their own numbered choices.
+The manual and systems inventory suspend simulation. The inventory is also available during refit. Route and upgrade screens use the number keys for their choices, so in campaign and endless runs **1–5** never change star density.
 
 ### Optional mouse controls
 
@@ -157,7 +157,7 @@ The chosen route supplies the active modifiers and scenery until another route i
 
 Scouts dive inward, hunters strafe and commit aimed plasma shots, and frigates apply slower pressure with a three-lane volley. Flagships hold engagement depth and change attack phase as their hull falls.
 
-![Odyssey flagship with shaded hull planes and committed impact markers](docs/odyssey-boss.png)
+![Odyssey flagship with shaded hull planes and committed impact markers](https://raw.githubusercontent.com/fortunexbt/terminal-starfield/main/docs/odyssey-boss.png)
 
 | Flagship | Phase 1 | Phase 2 | Phase 3 |
 |:--|:--|:--|:--|
