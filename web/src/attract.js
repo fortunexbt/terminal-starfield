@@ -1,5 +1,6 @@
 // Idle screen: a warp field in the game's CYAN//VOID palette that leans toward the pointer.
 const STARS = 320;
+const BANDS = 6;
 const FAR = [55, 86, 130];
 const NEAR = [210, 247, 255];
 const ACCENT = [72, 238, 255];
@@ -39,6 +40,8 @@ export function runAttract(canvas) {
     const cx = width / 2 - lean.x * width * 0.18;
     const cy = height / 2 - lean.y * height * 0.18;
     const scale = Math.max(width, height) * 0.5;
+    // One path per depth band keeps this to a handful of stroke calls per frame.
+    const bands = Array.from({ length: BANDS }, () => new Path2D());
     for (const s of stars) {
       s.z -= dt * 0.28;
       if (s.z <= 0.03) Object.assign(s, star(1));
@@ -48,17 +51,19 @@ export function runAttract(canvas) {
         Object.assign(s, star(1));
         continue;
       }
-      const near = 1 - s.z;
-      const color = near > 0.82 ? ACCENT : FAR.map((c, i) => Math.round(c + (NEAR[i] - c) * near));
-      context.strokeStyle = `rgba(${color[0]}, ${color[1]}, ${color[2]}, ${0.4 + near * 0.6})`;
-      context.lineWidth = 0.8 + near * 2.2;
-      context.beginPath();
-      context.moveTo(s.px ?? x, s.py ?? y);
-      context.lineTo(x + 0.1, y + 0.1);
-      context.stroke();
+      const path = bands[Math.min(BANDS - 1, Math.floor((1 - s.z) * BANDS))];
+      path.moveTo(s.px ?? x, s.py ?? y);
+      path.lineTo(x + 0.1, y + 0.1);
       s.px = x;
       s.py = y;
     }
+    bands.forEach((path, band) => {
+      const near = (band + 0.5) / BANDS;
+      const color = band === BANDS - 1 ? ACCENT : FAR.map((c, i) => Math.round(c + (NEAR[i] - c) * near));
+      context.strokeStyle = `rgba(${color[0]}, ${color[1]}, ${color[2]}, ${0.4 + near * 0.6})`;
+      context.lineWidth = 0.8 + near * 2.2;
+      context.stroke(path);
+    });
   }
 
   const tick = (now) => {
