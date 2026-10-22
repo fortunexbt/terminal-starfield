@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Starfield Rogue: the terminal space shooter, in your browser</title>
+  <meta name="description" content="A seeded space-combat roguelite drawn in ANSI text by zero-dependency Python. Play the real game here on Pyodide, or install it with pipx.">
+  <meta name="theme-color" content="#03060b">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="canonical" href="https://terminal-starfield.vercel.app/">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://terminal-starfield.vercel.app/">
+  <meta property="og:title" content="Starfield Rogue: the terminal space shooter, in your browser">
+  <meta property="og:description" content="Zero-dependency Python, rendered in ANSI. The real game runs here on Pyodide.">
+  <meta property="og:image" content="https://terminal-starfield.vercel.app/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+</head>
+<body>
+  <a class="skip" href="#console">Skip to the game</a>
+  <header class="top">
+    <a class="mark" href="/" aria-label="Starfield Rogue home">STARFIELD<span>Odyssey 4.0</span></a>
+    <a class="source" href="https://github.com/fortunexbt/terminal-starfield">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.72 1.22 1.87.87 2.33.66.07-.52.28-.87.5-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.19c0 .21.15.46.55.38A8 8 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+      Source
+    </a>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="pitch">
+        <h1>A space combat roguelite that lives in your terminal.</h1>
+        <p class="lede">Fifteen waves, three hulls and three flagships, drawn in ANSI text by 3,400 lines of Python with no dependencies. The screen here runs that same Python in your browser.</p>
+        <div class="actions">
+          <button class="launch" type="button" data-launch>Launch the game</button>
+          <button class="ghost" type="button" data-launch="demo">Watch the autopilot</button>
+        </div>
+        <p class="hint hint-keys">Keyboard: <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> steer, <kbd>Space</kbd> fire, <kbd>Enter</kbd> deploy. Your mouse steers too.</p>
+        <p class="hint hint-touch">On a phone, fly with the pad under the screen. Auto-fire starts on. Turn sideways for a wider view.</p>
+      </div>
+
+      <div class="console" id="console" data-state="idle">
+        <div class="bezel">
+          <div class="bezel-bar">
+            <span class="led" aria-hidden="true"></span>
+            <span data-status>TTY idle</span>
+            <span class="bezel-size" data-size></span>
+          </div>
+          <div class="screen">
+            <canvas class="attract" aria-hidden="true"></canvas>
+            <div class="term" aria-label="Starfield game terminal"></div>
+            <div class="overlay" data-overlay>
+              <button class="power" type="button" data-launch>
+                <span class="power-key">Enter</span>
+                <span class="power-label">Launch</span>
+                <span class="power-note">Loads a 6 MB Python runtime once</span>
+              </button>
+              <div class="boot" hidden>
+                <ol class="boot-log" aria-live="polite"></ol>
+                <div class="meter" role="progressbar" aria-label="Loading Python" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span></span></div>
+              </div>
+              <div class="ended" hidden>
+                <p class="ended-text"></p>
+                <button class="launch" type="button" data-again>Fly again</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="pad" hidden>
+          <div class="pad-row pad-keys">
+            <button type="button" data-key="enter">Enter</button>
+            <button type="button" data-key="esc">Esc</button>
+            <button type="button" data-key="p">Pause</button>
+            <button type="button" data-key="i">Systems</button>
+            <button type="button" data-key="h">Help</button>
+          </div>
+          <div class="pad-row pad-keys">
+            <button type="button" data-key="1">1</button>
+            <button type="button" data-key="2">2</button>
+            <button type="button" data-key="3">3</button>
+            <button type="button" data-key="4">4</button>
+            <button type="button" data-key="5">5</button>
+            <button type="button" data-key="6">6</button>
+          </div>
+          <div class="pad-main">
+            <div class="dpad">
+              <button type="button" class="up" data-key="w" data-repeat aria-label="Steer up (W)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg></button>
+              <button type="button" class="left" data-key="a" data-repeat aria-label="Steer left (A)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+              <button type="button" class="right" data-key="d" data-repeat aria-label="Steer right (D)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+              <button type="button" class="down" data-key="s" data-repeat aria-label="Steer down (S)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+            </div>
+            <div class="arms">
+              <button type="button" class="fire" data-key=" " data-repeat>Fire</button>
+              <button type="button" data-key="e">Nova</button>
+              <button type="button" data-key="m">Seeker</button>
+              <button type="button" data-key="b" data-repeat>Boost</button>
+              <button type="button" data-key="f">Auto</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="install">
+        <span class="install-label" id="install-label">Keep it in your terminal</span>
+        <div class="command" aria-labelledby="install-label">
+          <code>pipx install git+https://github.com/fortunexbt/terminal-starfield</code>
+          <button type="button" class="copy" data-copy="pipx install git+https://github.com/fortunexbt/terminal-starfield">Copy</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="how" aria-labelledby="how-title">
+      <h2 id="how-title">Nothing was ported</h2>
+      <p>The browser build copies the nine modules in <code>terminal_starfield/</code> into Pyodide, CPython compiled to WebAssembly, and runs them in a Web Worker. A 30-line <code>BrowserTTY</code> class stands in for the terminal session. It hands keystrokes from xterm.js to the game's own escape-sequence decoder and sends back the ANSI frame the game would have written to your TTY.</p>
+      <ol class="flow" aria-label="One frame, start to finish">
+        <li><span>xterm.js</span>keys and mouse as bytes</li>
+        <li><span>KeyDecoder.feed()</span>arrows, SGR mouse, Esc</li>
+        <li><span>Flight.step()</span>120 Hz fixed-step simulation</li>
+        <li><span>Renderer.frame()</span>24-bit ANSI, Braille subcells</li>
+        <li><span>xterm.js</span>WebGL glyph atlas</li>
+      </ol>
+      <p>Finished campaign and endless runs go into the game's own flight log, which this page keeps in your browser's storage, so the flight deck remembers your best score.</p>
+    </section>
+
+    <section class="controls" aria-labelledby="controls-title">
+      <h2 id="controls-title">Flight controls</h2>
+      <dl>
+        <div><dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dt><dd>Steer the flight vector. On the flight deck, pick a hull and a mode.</dd></div>
+        <div><dt><kbd>Enter</kbd></dt><dd>Deploy from the flight deck</dd></div>
+        <div><dt><kbd>Space</kbd></dt><dd>Fire photons. Shots build heat.</dd></div>
+        <div><dt><kbd>F</kbd></dt><dd>Auto-fire while a target is in the sight</dd></div>
+        <div><dt><kbd>M</kbd></dt><dd>Launch a seeker at a locked target</dd></div>
+        <div><dt><kbd>E</kbd></dt><dd>Nova: clears nearby plasma, costs 35 energy</dd></div>
+        <div><dt><kbd>B</kbd></dt><dd>Boost</dd></div>
+        <div><dt><kbd>↑</kbd><kbd>↓</kbd></dt><dd>Throttle</dd></div>
+        <div><dt><kbd>1</kbd>&ndash;<kbd>6</kbd></dt><dd>Pick upgrades, refit services and routes</dd></div>
+        <div><dt><kbd>I</kbd> <kbd>H</kbd> <kbd>P</kbd></dt><dd>Ship systems, manual, pause</dd></div>
+        <div><dt><kbd>Q</kbd></dt><dd>Quit to the shell</dd></div>
+        <div><dt>Mouse</dt><dd>Point to steer, click to fire, right-click for a seeker, wheel for throttle</dd></div>
+      </dl>
+    </section>
+
+    <section class="get" aria-labelledby="get-title">
+      <h2 id="get-title">Play it where it belongs</h2>
+      <p>Python 3.9 or newer on macOS, Linux or Windows through WSL. Any terminal with 24-bit colour shows the full artwork, and <code>--ascii</code> covers the rest.</p>
+<pre class="shell"><code><span class="prompt">$</span> pipx install git+https://github.com/fortunexbt/terminal-starfield
+<span class="prompt">$</span> starfield
+<span class="prompt">$</span> starfield --demo
+<span class="prompt">$</span> starfield --mode endless --seed 7 --mouse</code></pre>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <span>MIT licensed. Built by <a href="https://github.com/fortunexbt">fortunexbt</a>.</span>
+    <span>Runs on <a href="https://pyodide.org">Pyodide</a> and <a href="https://xtermjs.org">xterm.js</a>.</span>
+  </footer>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
