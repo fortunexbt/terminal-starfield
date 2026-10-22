@@ -385,6 +385,10 @@ class Flight:
         self.recorder.observe(simulation.state)
         return self.renderer.frame(simulation.state, width, height, color=not self.args.no_color)
 
+    def farewell(self) -> str:
+        state = self.simulation.state
+        return "Voyage complete // score {:,} // distance {:.1f} AU".format(state.score, state.distance)
+
 
 def run_interactive(args: argparse.Namespace) -> int:
     if not (sys.stdin.isatty() and sys.stdout.isatty()):
@@ -406,8 +410,7 @@ def run_interactive(args: argparse.Namespace) -> int:
             delay = target_frame - (time.monotonic() - frame_started)
             if delay > 0.0:
                 time.sleep(delay)
-    state = flight.simulation.state
-    print("Voyage complete // score {:,} // distance {:.1f} AU".format(state.score, state.distance))
+    print(flight.farewell())
     return 0
 
 
