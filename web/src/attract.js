@@ -1,5 +1,5 @@
 // Idle screen: a warp field in the game's CYAN//VOID palette that leans toward the pointer.
-const STARS = 220;
+const STARS = 320;
 const FAR = [55, 86, 130];
 const NEAR = [210, 247, 255];
 const ACCENT = [72, 238, 255];
@@ -32,7 +32,7 @@ export function runAttract(canvas) {
   };
 
   function draw(dt) {
-    context.fillStyle = 'rgba(2, 5, 10, 0.55)';
+    context.fillStyle = 'rgba(2, 5, 10, 0.32)';
     context.fillRect(0, 0, width, height);
     lean.x += (lean.tx - lean.x) * Math.min(1, dt * 3);
     lean.y += (lean.ty - lean.y) * Math.min(1, dt * 3);
@@ -40,7 +40,7 @@ export function runAttract(canvas) {
     const cy = height / 2 - lean.y * height * 0.18;
     const scale = Math.max(width, height) * 0.5;
     for (const s of stars) {
-      s.z -= dt * 0.22;
+      s.z -= dt * 0.28;
       if (s.z <= 0.03) Object.assign(s, star(1));
       const x = cx + (s.x / s.z) * scale;
       const y = cy + (s.y / s.z) * scale;
@@ -50,8 +50,8 @@ export function runAttract(canvas) {
       }
       const near = 1 - s.z;
       const color = near > 0.82 ? ACCENT : FAR.map((c, i) => Math.round(c + (NEAR[i] - c) * near));
-      context.strokeStyle = `rgba(${color[0]}, ${color[1]}, ${color[2]}, ${0.25 + near * 0.75})`;
-      context.lineWidth = 0.6 + near * 1.8;
+      context.strokeStyle = `rgba(${color[0]}, ${color[1]}, ${color[2]}, ${0.4 + near * 0.6})`;
+      context.lineWidth = 0.8 + near * 2.2;
       context.beginPath();
       context.moveTo(s.px ?? x, s.py ?? y);
       context.lineTo(x + 0.1, y + 0.1);

@@ -116,7 +116,7 @@ kbd {
 
 .hero {
   display: grid;
-  grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+  grid-template-columns: minmax(300px, 420px) minmax(0, 1fr);
   grid-template-areas: "pitch console" "install console";
   grid-template-rows: auto 1fr;
   column-gap: clamp(32px, 4vw, 64px);
@@ -126,12 +126,12 @@ kbd {
 }
 
 .pitch { grid-area: pitch; padding-top: clamp(0px, 4vh, 48px); }
-.console { grid-area: console; }
+.console { grid-area: console; scroll-margin-top: 12px; }
 .install { grid-area: install; }
 
 h1 {
   margin: 0;
-  font: 600 clamp(2rem, 3.2vw, 3rem)/1.06 var(--display);
+  font: 600 clamp(2rem, 3.1vw, 2.9rem)/1.06 var(--display);
   letter-spacing: -0.01em;
   color: var(--ink);
   text-wrap: balance;
@@ -183,7 +183,7 @@ h1 {
 }
 .hint-touch { display: none; }
 @media (pointer: coarse) {
-  .hint-keys { display: none; }
+  .hint-keys, .power-key { display: none; }
   .hint-touch { display: block; }
 }
 
@@ -536,7 +536,7 @@ section code {
 }
 .controls dl > div {
   display: grid;
-  grid-template-columns: 9.5rem minmax(0, 1fr);
+  grid-template-columns: 7rem minmax(0, 1fr);
   gap: 16px;
   align-items: baseline;
   padding: 12px 0;
@@ -580,6 +580,7 @@ section code {
     row-gap: 28px;
   }
   .pitch { padding-top: 8px; }
+  .actions { gap: 8px; }
   .screen { height: clamp(260px, 66vw, 560px); }
 }
 
@@ -597,6 +598,10 @@ section code {
   .term { inset: 6px; }
   .power { padding: 18px 22px; }
   .mark span { display: none; }
+  h1 { font-size: 1.85rem; }
+  .lede { font-size: 1rem; margin-top: 14px; }
+  .actions { margin-top: 22px; }
+  .launch, .ghost { padding-inline: 14px; font-size: 0.95rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {

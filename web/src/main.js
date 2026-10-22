@@ -66,8 +66,14 @@ function halt(message) {
 }
 
 async function launch(mode) {
-  if (consoleEl.dataset.state !== 'idle') return;
+  if (consoleEl.dataset.state !== 'idle') {
+    consoleEl.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    game?.focus();
+    return;
+  }
   setState('booting', 'Booting');
+  document.querySelector('.actions .launch').textContent = 'Back to the game';
+  document.querySelector('.actions .ghost').hidden = true;
   overlay.querySelector('.power').hidden = true;
   boot.hidden = false;
   setProgress(0);
