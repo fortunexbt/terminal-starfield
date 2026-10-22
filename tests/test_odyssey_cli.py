@@ -4,7 +4,7 @@ import io
 import unittest
 from contextlib import redirect_stdout
 
-from terminal_starfield.cli import KeyDecoder, build_parser, handle_key, main
+from terminal_starfield.cli import Flight, KeyDecoder, build_parser, handle_key, main
 from terminal_starfield.model import Simulation
 
 
@@ -60,3 +60,23 @@ class OdysseyControlTests(unittest.TestCase):
                                        "--ascii", "--no-color", "--no-record"]), 0)
                 self.assertTrue(output.getvalue().isascii())
                 self.assertEqual(len(output.getvalue().splitlines()), 24)
+
+
+class FlightLoopTests(unittest.TestCase):
+    """The loop shared by the TTY runtime and the browser build needs no terminal."""
+
+    def test_step_renders_deploys_and_exits_from_decoded_input(self):
+        flight = Flight(build_parser().parse_args(["--no-record", "--ascii", "--no-color", "--seed", "7"]))
+        decoder = KeyDecoder()
+        self.assertIn("FLIGHT DECK", flight.step(decoder.feed(b""), 1 / 30, 100, 30))
+        frame = flight.step(decoder.feed(b"\r"), 1 / 30, 40, 12)
+        self.assertEqual(flight.simulation.state.screen, "playing")
+        self.assertEqual([len(row) for row in frame.split("\n")], [40] * 12)
+        self.assertIsNone(flight.step(decoder.feed(b"q"), 1 / 30, 40, 12))
+
+    def test_any_key_ends_the_demo_without_recording(self):
+        flight = Flight(build_parser().parse_args(["--no-record", "--demo", "--seed", "7"]))
+        self.assertIn("DEMO", flight.step([], 1 / 30, 100, 30))
+        flight.step(["x"], 1 / 30, 100, 30)
+        self.assertFalse(flight.demo_mode)
+        self.assertEqual(flight.simulation.state.screen, "title")
