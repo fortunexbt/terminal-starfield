@@ -819,7 +819,8 @@ class Renderer:
                 entries.extend(("SPACE/M fire/seeker", "E/B pulse/boost", "P/R pause/replay"))
             else:
                 entries.extend(("SPACE boost", "P/R pause/replay", "Z zen drift"))
-            entries.extend(("T/C trails/theme", "1-5/[ ] star density"))
+            density = "[ ] star density" if state.run_mode in ("campaign", "endless") else "1-5/[ ] star density"
+            entries.extend(("T/C trails/theme", density))
             canvas.text(0, 0, "FLIGHT MANUAL"[:canvas.width], theme.accent, "bold", 92)
             for row, line in enumerate(entries[:canvas.height - 2], 1):
                 canvas.text(0, row, self._fit(line, canvas.width), theme.hot, priority=92)
@@ -838,7 +839,7 @@ class Renderer:
                 ("M", "launch homing seeker"),
                 ("E", "nova pulse (35 energy)"),
                 ("B", "vector boost"),
-                ("1…5 / [ ]", "star density"),
+                ("[ / ]", "star density"),
                 ("T / C", "trails / color system"),
                 ("F / I", "auto fire / ship systems"),
                 ("P / R", "pause / restart run"),

@@ -80,3 +80,36 @@ class FlightLoopTests(unittest.TestCase):
         flight.step(["x"], 1 / 30, 100, 30)
         self.assertFalse(flight.demo_mode)
         self.assertEqual(flight.simulation.state.screen, "title")
+
+
+class NumberKeyTests(unittest.TestCase):
+    def test_campaign_flight_ignores_number_keys(self):
+        for mode in ("campaign", "endless"):
+            sim = Simulation(density=40, seed=7)
+            sim.start_run(mode)
+            before = sim.state.density
+            for key in "12345":
+                self.assertTrue(handle_key(sim, key))
+            self.assertEqual(sim.state.density, before)
+            self.assertEqual(sim.state.screen, "playing")
+
+    def test_campaign_flight_still_adjusts_density_with_brackets(self):
+        sim = Simulation(density=200, seed=7)
+        sim.start_run("campaign")
+        handle_key(sim, "]")
+        self.assertGreater(sim.state.density, 200)
+
+    def test_free_flight_number_keys_set_density_presets(self):
+        sim = Simulation(density=40, seed=7)
+        sim.start_run("voyage")
+        handle_key(sim, "5")
+        self.assertEqual(sim.state.density, Simulation.DENSITY_PRESETS[4])
+
+    def test_refit_numbers_still_choose_upgrades(self):
+        sim = Simulation(density=40, seed=7)
+        sim.start_run("campaign")
+        sim.state.screen = "upgrade"
+        sim.state.upgrade_choices = sim._draft_upgrades()
+        chosen = sim.state.upgrade_choices[0]
+        handle_key(sim, "1")
+        self.assertEqual(sim.state.upgrades.get(chosen), 1)
