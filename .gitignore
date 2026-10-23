@@ -51,3 +51,4 @@ env/
 # Project specific
 *.log
 .cache/
+.vercel
