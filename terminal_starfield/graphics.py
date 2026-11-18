@@ -84,7 +84,11 @@ def planet(canvas, cx: float, cy: float, radius: float, palette: RGB,
     atmosphere = VectorInk(canvas, tint(palette, .62), 5, top, bottom)
     atmosphere.ellipse(cx, cy, radius + .8, ry + .35, 0, math.pi * .70, math.pi * 1.80)
     atmosphere.flush()
-    shades = " .,:;ox%#@" if world == "sun" else " .,:;oO#"
+    # Unicode terminals get a block ramp, so colour carries the lighting instead of letterforms.
+    if canvas.unicode:
+        shades = " ·:░▒▓█" if world == "sun" else " ·:░▒▓"
+    else:
+        shades = " .,:;ox%#@" if world == "sun" else " .,:;oO#"
     for y in range(max(top, math.floor(cy - ry)), min(bottom, math.ceil(cy + ry)) + 1):
         ny = (y - cy) / max(1.0, ry)
         for x in range(max(0, math.floor(cx - radius)), min(canvas.width - 1, math.ceil(cx + radius)) + 1):
