@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Weapons shed heat at 48 per second and come back online at 60, so sustained fire overheats after a few seconds and the lockout lasts about one
+- Hulls draw larger and grow as they close, and their hit radius widens to match (0.055, flagships 0.12)
+- Kills flash white, throw a shock ring and sparks that cool to red, and float the points scored
+- Photons fire as twin beams from the gun ports that converge on the sight, then streak away
+- Close plasma bolts are bracketed, and shield hits jolt the view and redden the screen edges
+- The combat HUD separates labels, meters and values, the heat meter warms as it fills, and key names stand out in the control line
+- Planets shade with block characters in Unicode terminals
+- Up to one more hostile is on screen at a time in each sector
+- The browser build opens on a live autopilot run; any key or click hands the ship to the player
+
 ## 4.0.0 — Odyssey
 
 ### Added

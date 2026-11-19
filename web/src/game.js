@@ -10,7 +10,8 @@ function fontSizeFor(width) {
   return Math.max(9, Math.min(16, Math.floor(width / 60)));
 }
 
-export async function startGame({ host, argv, touch, events }) {
+export async function startGame({ host, argv: initialArgv, touch, events }) {
+  let argv = initialArgv;
   await document.fonts.load('16px "IBM Plex Mono"');
   const term = new Terminal({
     fontFamily: '"IBM Plex Mono", ui-monospace, Menlo, monospace',
@@ -62,7 +63,9 @@ export async function startGame({ host, argv, touch, events }) {
     requestAnimationFrame(loop);
   };
 
-  term.onData((data) => { input += data; });
+  term.onData((data) => {
+    if (events.onInput(data)) input += data;
+  });
 
   worker.onmessage = ({ data }) => {
     if (data.type === 'frame') {
@@ -93,7 +96,10 @@ export async function startGame({ host, argv, touch, events }) {
 
   return {
     send(data) { input += data; },
-    restart() { worker.postMessage({ type: 'restart', argv }); },
+    restart(next) {
+      argv = next;
+      worker.postMessage({ type: 'restart', argv });
+    },
     focus() { term.focus(); },
   };
 }

@@ -149,6 +149,8 @@ class Burst:
     kind: str
     age: float = 0.0
     lifetime: float = 0.7
+    scale: float = 1.0
+    label: str = ""
 
     @property
     def progress(self) -> float:
@@ -948,7 +950,10 @@ class Simulation:
         state.credits += max(1, round((enemy.score // 50) * salvage_scale))
         state.shield = min(state.max_shield, state.shield + 2 * state.upgrades.get("leech", 0))
         sx, sy = self._project_normalized(enemy.x, enemy.y, max(0.1, enemy.z))
-        state.bursts.append(Burst(sx, sy, "boss" if enemy.kind == "boss" else "enemy", lifetime=1.2 if enemy.kind == "boss" else 0.65))
+        # Nearer kills read larger on screen, so the blast grows with the hull it replaces.
+        state.bursts.append(Burst(sx, sy, "boss" if enemy.kind == "boss" else "enemy",
+                                  lifetime=1.6 if enemy.kind == "boss" else 0.9,
+                                  scale=clamp(.6 / max(.12, enemy.z), 1.0, 3.4), label="+{}".format(points)))
         if enemy.kind == "boss":
             state.bosses_defeated += 1
             self.notify("{} DESTROYED // +{:04d}".format(state.boss_name, points), "accent", 3.0)
@@ -1061,7 +1066,7 @@ class Simulation:
                 self._cascade(enemy)
         if shot.kind == "missile":
             sx, sy = self._project_normalized(enemy.x, enemy.y, max(.1, enemy.z))
-            state.bursts.append(Burst(sx, sy, "missile", lifetime=.8))
+            state.bursts.append(Burst(sx, sy, "missile", lifetime=.8, scale=clamp(.6 / max(.12, enemy.z), 1.0, 3.4)))
 
     def _update_projectiles(self, dt: float, old_positions: Dict[int, Tuple[float, float, float]], old_heading: Tuple[float, float]) -> None:
         state = self.state
@@ -1088,7 +1093,7 @@ class Simulation:
                     after = tuple(first + (last - first) * fraction for first, last in zip(before, (enemy.x, enemy.y, enemy.z)))
                     relative_start = tuple(value - center for value, center in zip(start, before))
                     relative_end = tuple(value - center for value, center in zip((shot.x, shot.y, shot.z), after))
-                    contact = self._swept_hit(relative_start, relative_end, .09 if enemy.kind == "boss" else .035)
+                    contact = self._swept_hit(relative_start, relative_end, .12 if enemy.kind == "boss" else .055)
                     if contact is not None:
                         impacts.append((contact, enemy))
                 consumed = False
@@ -1134,13 +1139,14 @@ class Simulation:
         state.missile_cooldown = max(0.0, state.missile_cooldown - dt)
         state.pulse_cooldown = max(0.0, state.pulse_cooldown - dt)
         state.invulnerable = max(0.0, state.invulnerable - dt)
-        state.weapon_heat = max(0.0, state.weapon_heat - (24.0 + state.upgrades.get("coolant", 0) * 3.0) * dt)
-        if state.overheated and state.weapon_heat < 42.0:
+        state.weapon_heat = max(0.0, state.weapon_heat - (48.0 + state.upgrades.get("coolant", 0) * 3.0) * dt)
+        # Sustained fire overheats after a few seconds; the lockout is about one second.
+        if state.overheated and state.weapon_heat < 60.0:
             state.overheated = False
             self.notify("WEAPON BUS READY", "accent", .9)
 
         self._spawn_clock -= dt
-        cap = min(7, 3 + state.sector)
+        cap = min(8, 4 + state.sector)
         if state.wave_remaining > 0 and len(state.enemies) < cap and self._spawn_clock <= 0.0:
             self._spawn_enemy()
             self._spawn_clock = .65 if state.boss_wave else max(.35, 1.05 - state.wave * .025)

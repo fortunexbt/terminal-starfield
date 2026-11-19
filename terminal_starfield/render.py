@@ -125,6 +125,15 @@ class Canvas:
             t = step / steps
             self.put(round(x0 + dx * t), round(y0 + dy * t), char, color, "dim", priority)
 
+    def shift_rows(self, top: int, bottom: int, dx: int) -> None:
+        """Slide a band of rows sideways; vacated cells become blank."""
+        for y in range(max(0, top), min(self.height - 1, bottom) + 1):
+            row = self.rows[y]
+            if dx > 0:
+                self.rows[y] = [Cell() for _ in range(dx)] + row[:-dx]
+            elif dx < 0:
+                self.rows[y] = row[-dx:] + [Cell() for _ in range(-dx)]
+
     def box(self, x: int, y: int, width: int, height: int, color: RGB, title: str = "", priority: int = 90) -> None:
         if width < 4 or height < 3:
             return
@@ -211,6 +220,9 @@ class Renderer:
             self._contacts(canvas, state, theme, top, bottom)
             self._bursts(canvas, state, theme, top, bottom)
             self._reticle(canvas, state, theme, top, bottom)
+            if state.impact_flash > .3 and state.screen == "playing":
+                # A hit jolts the view a column each way before the HUD is drawn over it.
+                canvas.shift_rows(top, bottom, 1 if int(state.elapsed * 40) % 2 else -1)
             if not state.zen and state.screen == "playing":
                 self._cockpit(canvas, state, theme, top, bottom)
             self._hud(canvas, state, theme, compact)
@@ -253,8 +265,9 @@ class Renderer:
             if canvas.width < 40 or bottom - top < 7:
                 canvas.put(x, y, {"scout": "v", "hunter": "X", "frigate": "#", "boss": "@"}[enemy.kind], color, "bold", 58)
                 continue
-            hull_span = 22 if boss else 9 if enemy.kind == "frigate" else 6
-            span = min(canvas.width * (.35 if boss else .15), hull_span / max(.35, enemy.z) ** .55)
+            # Hulls loom as they close, roughly tracking the projected hit radius.
+            hull_span = 34 if boss else 17 if enemy.kind == "frigate" else 12 if enemy.kind == "hunter" else 11
+            span = min(canvas.width * (.42 if boss else .24), hull_span / max(.3, enemy.z) ** .85)
             draw_ship(canvas, enemy, x, y, span, color, shape, top, bottom)
             if boss and canvas.width >= 72:
                 label = BOSS_PROFILES[enemy.boss_id].name
@@ -272,15 +285,26 @@ class Renderer:
                 continue
             if shot.kind == "missile":
                 glyph, color = ("➤" if self.unicode else ">"), theme.warning
+                tail_x, tail_y, _, _ = project(state, shot.x, shot.y, max(.06, shot.z - .12), canvas.width, top, bottom)
+                canvas.line(tail_x, tail_y, x, y, "·" if self.unicode else ".", theme.muted, 60)
             elif shot.friendly:
-                glyph, color = ("│" if self.unicode else "|"), theme.accent
+                glyph, color = ("•" if self.unicode else "*"), theme.hot
+                ink = VectorInk(canvas, theme.accent, 61, top, bottom)
+                if shot.z < .42 and bottom - top > 8:
+                    # Fresh photons draw as twin beams from the gun ports, converging on the sight.
+                    for side in (-1, 1):
+                        ink.line((canvas.width / 2 + side * canvas.width * .2, bottom), (x, y))
+                else:
+                    tail_x, tail_y, _, _ = project(state, shot.x, shot.y, max(.06, shot.z - .22), canvas.width, top, bottom)
+                    ink.line((tail_x, tail_y), (x, y))
+                ink.flush()
             else:
-                glyph, color = ("●" if self.unicode else "o"), theme.danger
+                close = shot.z < .32
+                glyph, color = ("●" if self.unicode else "o"), mix(theme.danger, theme.hot, .35) if close else theme.danger
+                if close and canvas.width >= 40:
+                    canvas.put(x - 1, y, "(", theme.danger, "bold", 61)
+                    canvas.put(x + 1, y, ")", theme.danger, "bold", 61)
             canvas.put(x, y, glyph, color, "bold", 62)
-            if shot.friendly and shot.z > 0.12:
-                old_z = max(0.06, shot.z - shot.speed * 0.035)
-                old_x, old_y, _, _ = project(state, shot.x, shot.y, old_z, canvas.width, top, bottom)
-                canvas.line(old_x, old_y, x, y, "·" if self.unicode else ".", color, 60)
 
     def _pickups(self, canvas: Canvas, state: GameState, theme: Theme, top: int, bottom: int) -> None:
         icons = {"repair": "+", "energy": "⚡" if self.unicode else "E", "missile": "▲" if self.unicode else "M", "credits": "$"}
@@ -342,6 +366,9 @@ class Renderer:
         for burst in state.bursts:
             x = round(cx + burst.x * canvas.width * 0.46)
             y = round(cy + burst.y * max(1, bottom - top) * 0.48)
+            if burst.kind in ("enemy", "boss", "missile") and canvas.width >= 40:
+                self._explosion(canvas, burst, x, y, theme, top, bottom)
+                continue
             radius = 1 + round(burst.progress * 6)
             color = theme.accent if burst.kind in ("signal", "pulse") else (theme.warning if burst.kind in ("enemy", "missile") else theme.danger)
             if burst.kind == "pulse":
@@ -352,6 +379,38 @@ class Renderer:
             points = ((-radius, 0), (radius, 0), (0, -max(1, radius // 2)), (0, max(1, radius // 2)))
             for dx, dy in points:
                 canvas.put(x + dx, y + dy, "✧" if self.unicode else "*", color, "bold", 48)
+
+    def _explosion(self, canvas: Canvas, burst, x: int, y: int, theme: Theme, top: int, bottom: int) -> None:
+        """A white core, a shock ring and sparks that cool from white through amber to red."""
+        p = burst.progress
+        size = burst.scale * (2.4 if burst.kind == "boss" else .7 if burst.kind == "missile" else 1.0)
+        cooling = mix(theme.hot, theme.warning, p * 2.2) if p < .45 else mix(theme.warning, theme.danger, (p - .45) * 1.8)
+        if p < .2:
+            radius = max(1.0, size * (1.2 + p * 8))
+            fill = ("█" if p < .08 else "▓") if self.unicode else "#"
+            for dy in range(-math.ceil(radius * .5), math.ceil(radius * .5) + 1):
+                for dx in range(-math.ceil(radius), math.ceil(radius) + 1):
+                    if (dx / radius) ** 2 + (dy / (radius * .5 + .01)) ** 2 <= 1 and top <= y + dy <= bottom:
+                        canvas.put(x + dx, y + dy, fill, theme.hot if p < .08 else theme.warning, "bold", 60)
+        if p < .75:
+            ring = VectorInk(canvas, mix(theme.warning, theme.danger, p * 1.3), 47, top, bottom)
+            reach = size * (2.0 + p * 10)
+            ring.ellipse(x, y, reach, reach * .46)
+            ring.flush()
+        sparks = 18 if burst.kind == "boss" else 10
+        glyphs = ("✦", "*", "+", "·", "·") if self.unicode else ("*", "*", "+", ".", ".")
+        spread = 1 - (1 - p) ** 2
+        offset = burst.x * 13.7 + burst.y * 7.1
+        for i in range(sparks):
+            angle = offset + i * math.tau / sparks
+            distance = size * (4.5 + (i * 7 % 5) * 1.3) * spread
+            px, py = round(x + math.cos(angle) * distance), round(y + math.sin(angle) * distance * .48)
+            if top <= py <= bottom:
+                canvas.put(px, py, glyphs[min(4, int(p * 5))], cooling, "bold" if p < .5 else "", 49)
+        if burst.label and canvas.width >= 60:
+            ly = round(y - 1 - size * .6 - p * 3)
+            if top <= ly <= bottom:
+                canvas.text(x - len(burst.label) // 2, ly, burst.label, theme.hot if p < .55 else theme.muted, "bold", 63)
 
     def _reticle(self, canvas: Canvas, state: GameState, theme: Theme, top: int, bottom: int) -> None:
         if state.zen or state.screen != "playing":
@@ -370,10 +429,14 @@ class Renderer:
                     canvas.text(tx - 2, ty + 2, "LOCK", theme.warning, "bold", 59)
         if state.muzzle_flash > 0 and bottom - top > 6:
             for side in (-1, 1):
-                canvas.line(x + side * 10, bottom - 1, x + side * 2, y + 1, "·", theme.accent, 56)
+                canvas.put(round(canvas.width / 2 + side * canvas.width * .2), bottom, "✦" if self.unicode else "*", theme.hot, "bold", 66)
         if state.impact_flash > 0:
-            canvas.text(0, top, "!" * min(8, canvas.width), theme.danger, "bold", 65)
-            canvas.text(canvas.width - min(8, canvas.width), top, "!" * min(8, canvas.width), theme.danger, "bold", 65)
+            # Shield hits wash the screen edges red, fading with the flash.
+            edge = "▌" if self.unicode else "|"
+            tone = mix(theme.nebula, theme.danger, min(1.0, state.impact_flash / .4))
+            for row in range(top, bottom + 1):
+                canvas.put(0, row, edge, tone, "bold", 65)
+                canvas.put(canvas.width - 1, row, "▐" if self.unicode else "|", tone, "bold", 65)
 
     def _cockpit(self, canvas: Canvas, state: GameState, theme: Theme, top: int, bottom: int) -> None:
         if canvas.width < 50 or bottom - top < 10:
@@ -388,6 +451,17 @@ class Renderer:
         weapon = "COOLING" if state.overheated else "ALIGNED" if state.target_aligned else "SEARCH"
         label = "{}  /  F AUTO {}".format(weapon, "ON" if state.auto_fire else "OFF")
         canvas.text((canvas.width - len(label)) // 2, bottom, label, theme.warning if state.target_aligned else theme.muted, "", 65)
+
+    def _key_hints(self, canvas: Canvas, y: int, text: str, theme: Theme) -> None:
+        """Key names in the accent colour, their actions muted."""
+        canvas.text(0, y, text, theme.muted, "", 70)
+        x = 0
+        for segment in text.split("  "):
+            key = segment.strip().split(" ")[0]
+            start = x + len(segment) - len(segment.lstrip())
+            if key:
+                canvas.text(start, y, key, theme.accent, "bold", 71)
+            x += len(segment) + 2
 
     def _meter(self, value: float, width: int = 10) -> str:
         filled = round(clamp(value, 0.0, 100.0) / 100.0 * width)
@@ -464,20 +538,22 @@ class Renderer:
             canvas.text(0, canvas.height - 1, "SPACE fire F auto M seeker I systems H?"[:canvas.width], theme.muted, priority=70)
             return
         shield_color = theme.danger if state.shield < state.max_shield * .3 else theme.accent
-        heat_color = theme.danger if state.overheated else theme.warning if state.weapon_heat > 65 else theme.muted
+        heat_color = theme.danger if state.overheated else mix(theme.muted, theme.warning, state.weapon_heat / 70)
         columns = (1, canvas.width // 3, canvas.width * 2 // 3)
         for x, label, value, tone in ((columns[0], "SHD", state.shield / state.max_shield * 100, shield_color),
                                       (columns[1], "HEAT", state.weapon_heat, heat_color),
                                       (columns[2], "ENG", state.energy, theme.hot)):
             actual = state.shield if label == "SHD" else value
-            canvas.text(x, 1, "{} {} {:03d}".format(label, self._meter(value, 10), round(actual)), tone, priority=70)
+            canvas.text(x, 1, label, theme.muted, priority=70)
+            canvas.text(x + len(label) + 1, 1, self._meter(value, 10), tone, "bold", 70)
+            canvas.text(x + len(label) + 12, 1, "{:03d}".format(round(actual)), tone, "bold", 70)
         pulse = ("READY" if state.energy >= 35 else "LOW E") if state.pulse_cooldown <= 0 else "{:.1f}s".format(state.pulse_cooldown)
         telemetry = "S{:02d} / W{:02d}  {}  HOSTILES {}  M {:02d}  NOVA {}".format(state.sector, state.wave, WAVE_LABELS[(state.wave - 1) % 5], len(state.enemies) + state.wave_remaining, state.missiles, pulse)
         canvas.text(1, 2, self._fit(telemetry, canvas.width - 2), theme.muted, "", 70)
         controls = " WASD steer  SPACE fire  F auto  M seeker  E nova  B boost  I systems  H help  Q exit"
         if canvas.width < len(controls):
             controls = " WASD steer  SPACE fire  F auto  M seeker  E nova  I systems  H help  Q exit"
-        canvas.text(0, canvas.height - 1, controls[:canvas.width], theme.muted, "", 70)
+        self._key_hints(canvas, canvas.height - 1, controls[:canvas.width], theme)
         if state.demo:
             canvas.text(canvas.width - 23, 0, "DEMO / ANY KEY TO PILOT", theme.warning, "bold", 72)
 
